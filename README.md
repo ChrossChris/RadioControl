@@ -7,4 +7,6 @@ The finally needed CPPM (continous pulse pause modulation) signal is provided by
 A second Arduino Nano controller is used only to communicate to the display and to prevent all communication delays from the Mega.
 The communication between both is based on standard Rx/Tx serial interface.
 
+![Radio control](./doc/img/01_RadioControl.jpg)
+
 Further details and description will follow....
