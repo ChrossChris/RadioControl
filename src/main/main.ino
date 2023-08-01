@@ -178,7 +178,7 @@ void loop()
   ppm[6] = map(elevator.trimm,  POTI_TRIMMER3_MIN,  POTI_TRIMMER3_MAX,  PPM_CENTER_VALUE-PPM_LEVEL, PPM_CENTER_VALUE+PPM_LEVEL);
   ppm[7] = map(aileron.trimm,   POTI_TRIMMER4_MIN,  POTI_TRIMMER4_MAX,  PPM_CENTER_VALUE-PPM_LEVEL, PPM_CENTER_VALUE+PPM_LEVEL);
 
-  // jetzt ist ein konsistenter Datensatz da, update des ISR buffers
+  // Update of PPM buffer for the ISR
   ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
   {
     memcpy((void *)ppmISR, (void *)ppm, sizeof(int)*PPM_CHANNELS);
