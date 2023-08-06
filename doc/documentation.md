@@ -2,6 +2,7 @@
 
 ## Außenansicht: Module und Einteilung
 ![Außenansicht](./img/Außenansicht.jpg)
+![Außenansicht mit Benamung](./img/02_RadioControl_Details.jpg)
 
 ## Entkernung Gehäuse
 ![Radio control casing (outside)](./img/10_Body_outside.jpg)
