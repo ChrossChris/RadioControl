@@ -149,10 +149,11 @@ void loop(void)
 
 
   counter++;
-  if (counter > 100)
+  if (counter >= 100)
   {
+    tone(BUZZER, 500);
+    delay(500
     noTone(BUZZER);
     counter = 0;
   }
-  else if (counter > 90)  tone(BUZZER, thrustValue+500);
 }
