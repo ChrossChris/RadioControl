@@ -1,22 +1,10 @@
-// This is part of the PDQ re-mixed version of Adafruit's GFX library
-// and associated chipset drivers.
-// Here is the libraries original copyright notice:
+#include <SPI.h>
+#include <Adafruit_GFX.h>
+#include <ILI9341_Fast.h>
 
-/***************************************************
-  This is an example sketch for the Adafruit 2.2" SPI display.
-  This library works with the Adafruit 2.2" TFT Breakout w/SD card
-  ----> http://www.adafruit.com/products/1480
- 
-  Check out the links above for our tutorials and wiring diagrams
-  These displays use SPI to communicate, 4 or 5 pins are required to
-  interface (RST is optional)
-  Adafruit invests time and resources providing this open source code,
-  please support Adafruit and open-source hardware by purchasing
-  products from Adafruit!
-
-  Written by Limor Fried/Ladyada for Adafruit Industries.
-  MIT license, all text above must be included in any redistribution
- ****************************************************/
+#include "RREFont.h"
+#include "rre_term_10x16.h"
+RREFont font;
 
 // Serielle Schnittstelle
 #define BAUD_RATE                 57600
@@ -24,55 +12,18 @@
 #define SERIAL_END                128
 #define UPDATE_PERIOD             100
 
+// ILI9341 240x320 2.4" tft
+#define TFT_WIDTH     320
+#define TFT_HEIGHT    240
+#define TFT_POWER_ON  7
+#define DATA          10
+#define CHIP_SELECT   9
+#define RESET         8
+ILI9341 tft = ILI9341(DATA, RESET, CHIP_SELECT);
 
-// LCD PIN  Uno (328) Leo (32u4)  644/1284
-// -------  --------- ---------- --------
-// 1  VCC   3.3V/5V  3.3V/5V  3.3V/5V // +3.3V or 5V with on-board regulator
-// 2  GND     GND      GND      GND
-// 3* CS      10       10      4  // Could be any GPIO pin, but then need to make sure SS isn't a LOW input (or slave SPI mode)
-// 4* RESET   0/8/RESET  0/8/RESET  0/RESET // This relies on soft-reset. You can also use Arduino reset pin (if correct voltage).
-// 5* DC/RS   9        9       3  // Could be any GPIO pin
-// 6* SDI/MOSI  11      ICSP4      5  // HW SPI pin (can't change)
-// 7* SCK     13      ICSP3      7  // HW SPI pin (can't change) NOTE: On Uno this causes on-board LED to flicker during SPI use
-// 8* LED  3.3V/5V   3.3V/5V  3.3V/5V // LCD screen blanked when LOW (could use GPIO for PWM dimming)
-// 9  SDO/MISO      -       -    -  // (not used if present, LCD code is currently "write only")
-//
-//  * = Typically only 3.3V safe logic-line (unless board has level converter [ala Adafruit]). Be careful with 5V!
+#define BUZZER        3
+#define UBATTREF      7
 
-
-
-#define ILI9341_SAVE_SPI_SETTINGS 0   // <= 0/1 with 1 to save/restore AVR SPI control and statusregisters (required when other SPI devices are in use with other settings)
-#define ILI9341_CS_PIN            9   // 5   // <= /CS pin (chip-select, LOW to get attention of ILI9341, HIGH and it ignores SPI bus)
-#define ILI9341_DC_PIN           10   // 6   // <= DC pin (1=data or 0=command indicator line) also called RS
-#define ILI9341_RST_PIN           8   //4   // <= RST pin (optional)
-#define LED_ON                    7
-
-
-#define BUZZER                    3
-#define UBATTREF                  7
-
-
-#include <SPI.h>				            // must include this here (or else IDE can't find it)
-#include <PDQ_GFX.h>				        // PDQ: Core graphics library
-#include <PDQ_ILI9341.h>			      // PDQ: Hardware-specific driver library
-
-// Fonts
-#include <Fonts/FreeSerif12pt7b.h>
-#include <Fonts/FreeSans12pt7b.h>	
-#include <Fonts/FreeSerifItalic12pt7b.h>
-
-// NOTE: Changes to test with Adafruit libraries (comment out PDQ lines above and un-comment the AF: ones below)
-// AF: #include <Adafruit_GFX.h>          // AF: Core graphics library
-// AF: #include <Adafruit_ILI9341.h>      // AF: Hardware-specific library
-// AF: Adafruit_ILI9341 tft(10,  9, 8);   // AF: create LCD object (HW SPI, CS=pin 10, D/C=pin 8, reset=9)
-
-
-PDQ_ILI9341 tft;      // PDQ: create LCD object (using pins in "PDQ_ILI9341_config.h")
-
-// These are used to get information about static SRAM and flash memory sizes
-extern "C" char __data_start[];		  // start of SRAM data
-extern "C" char _end[];			        // end of SRAM data (used to check amount of SRAM this program's variables use)
-extern "C" char __data_load_end[];	// end of FLASH (used to check amount of Flash this program's code and data uses)
 
 
 // -----------------------------------------------------------------------------------------------
@@ -91,50 +42,49 @@ struct ToneSequence
 };
 typedef ToneSequence TS;
 
+// needed for RREFont library initialization, define your fillRect
+void customRect(int x, int y, int w, int h, int c) 
+{
+  return tft.fillRect(x, y, w, h, c);
+}
+
 
 void setup()
 {
  // put your setup code here, to run once:
-  pinMode(LED_ON, OUTPUT);
-  digitalWrite(LED_ON, HIGH);
+  pinMode(TFT_POWER_ON, OUTPUT);
+  digitalWrite(TFT_POWER_ON, HIGH);
 
-#if defined(ILI9341_RST_PIN)	// reset like Adafruit does
-	FastPin<ILI9341_RST_PIN>::setOutput();
-	FastPin<ILI9341_RST_PIN>::hi();
-	FastPin<ILI9341_RST_PIN>::lo();
-	delay(1);
-	FastPin<ILI9341_RST_PIN>::hi();
-#endif
-
-	tft.begin();			// initialize LCD
+	tft.init();
+  tft.fillScreen(BLACK);
   tft.setRotation(3);
-  tft.fillScreen(ILI9341_BLACK);
-  tft.setCursor(0, 35);
-  tft.setTextColor(65535);
-  tft.setTextSize(1);
-  tft.setFont(&FreeSerif12pt7b);
-  tft.setTextWrap(false);
-  tft.println("Start...");
+  font.init(customRect, TFT_WIDTH, TFT_HEIGHT);
   
   Serial.begin(BAUD_RATE);
+  
   pinMode(BUZZER, OUTPUT);
 
 }
 
 
-int thrust   = 0;
-int rudder   = 0;
-int elevator = 0;
-int aileron  = 0;
-int uBattRef = 0;
+int   thrustValue    = 0;
+int   rudderValue    = 0;
+int   elevatorValue  = 0;
+int   aileronValue   = 0;
+int   thrustTrim     = 0;
+int   rudderTrim     = 0;
+int   elevatorTrim   = 0;
+int   aileronTrim    = 0;
+int   uBattRef       = 0;
+int   screen         = 0;
   
 
 void loop(void)
 {
-
-// ----------------------------------------------------------------------------------
+  static int counter = 0;
+  // ----------------------------------------------------------------------------------
   // Datenstrom entsprechend Protokoll über die serielle Schnittstelle einlesen
-  byte rxMsg[8] = {0};
+  byte rxMsg[20] = {0};
   byte amount    = 0;
 
   byte rxByte = 0;
@@ -157,30 +107,52 @@ void loop(void)
 
   // ----------------------------------------------------------------------------------
   // Empfangene Daten verarbeiten und interpretieren
-  thrust   = (unsigned int)  word(rxMsg[0],rxMsg[1]);  
-  rudder   = (unsigned int)  word(rxMsg[2],rxMsg[2]);  
-  elevator = (unsigned int)  word(rxMsg[4],rxMsg[5]);  
-  aileron  = (unsigned int)  word(rxMsg[6],rxMsg[7]);  
+  thrustValue   = (unsigned int)  word(rxMsg[ 0],rxMsg[ 1]);  
+  rudderValue   = (unsigned int)  word(rxMsg[ 2],rxMsg[ 2]);  
+  elevatorValue = (unsigned int)  word(rxMsg[ 4],rxMsg[ 5]);  
+  aileronValue  = (unsigned int)  word(rxMsg[ 6],rxMsg[ 7]);  
+  thrustTrim    = (unsigned int)  word(rxMsg[ 8],rxMsg[ 9]);  
+  rudderTrim    = (unsigned int)  word(rxMsg[10],rxMsg[11]);  
+  elevatorTrim  = (unsigned int)  word(rxMsg[12],rxMsg[13]);  
+  aileronTrim   = (unsigned int)  word(rxMsg[14],rxMsg[15]);  
+  screen        = (unsigned int)  word(rxMsg[16],rxMsg[17]);
   
-  tft.fillScreen(ILI9341_BLACK);
 
-  tft.setCursor(0, 35);
-  tft.setTextColor(65535);
-  tft.setTextWrap(false);
-  tft.setTextSize(1);
-  tft.setFont(&FreeSerif12pt7b);
+  if (screen == 0)
+  {
+    setLevelMeter("Thrust Value",   thrustValue,   0, 1023, 0);
+    setLevelMeter("Rudder Value",   rudderValue,   0, 1023, 1);
+    setLevelMeter("Elevator Value", elevatorValue, 0, 1023, 2);
+    setLevelMeter("Aileron Value",  aileronValue,  0, 1023, 3);
+  }
+  else if (screen == 1)
+  {
+    setLevelMeter("Thrust Trim",   thrustTrim,   0, 1023, 0);
+    setLevelMeter("Rudder Trim",   rudderTrim,   0, 1023, 1);
+    setLevelMeter("Elevator Trim", elevatorTrim, 0, 1023, 2);
+    setLevelMeter("Aileron Trim",  aileronTrim,  0, 1023, 3);
+  }
+  else if (screen == 2)
+  {
+    setLevelMeter("Battery",        uBattRef,      0, 1023, 0);
+    setLevelMeter("Rudder Value",   rudderValue,   0, 1023, 1);
+    setLevelMeter("Elevator Value", elevatorValue, 0, 1023, 2);
+    setLevelMeter("Aileron Value",  aileronValue,  0, 1023, 3);
+  }
+//  else
+//  {
+//    setLevelMeter("Screen",         screen,      0, 1023, 0);
+//    setLevelMeter("Screen",         screen,      0, 1023, 1);
+//    setLevelMeter("Screen",         screen,      0, 1023, 2);
+//    setLevelMeter("Screen",         screen,      0, 1023, 3);
+//  }
 
-  tft.print("Thrust: ");
-  tft.println(thrust);
-  tft.print("Rudder: ");
-  tft.println(rudder);
-  tft.print("Elevator: ");
-  tft.println(elevator);
-  tft.print("Aileron: ");
-  tft.println(aileron);
-  tft.print("Batterie: ");
-  tft.println(uBattRef);
 
-  if (thrust < 1500) noTone(BUZZER);
-  else tone(BUZZER, elevator);
+  counter++;
+  if (counter > 100)
+  {
+    noTone(BUZZER);
+    counter = 0;
+  }
+  else if (counter > 90)  tone(BUZZER, thrustValue+500);
 }

@@ -106,10 +106,11 @@ void setup()
   initCPPM();
 }
 
+Joystick thrust, rudder, elevator, aileron;
+int      screen = 0;
 
 void loop()
 {
-  Joystick thrust, rudder, elevator, aileron;
   thrust.value    = analogRead(JOYSTICK1);
   thrust.trimm    = analogRead(TRIMMER1);
   rudder.value    = analogRead(JOYSTICK2);
@@ -155,6 +156,7 @@ void loop()
   else if (digitalRead(SWITCH_MAIN2_3PST_POS2) == 1)  switchCenter[3] = 2;
   else                                                switchCenter[3] = 1;
 
+
   if      (digitalRead(SWITCH_MAIN4_3PST_POS1) == 1)  switchCenter[5] = 0;
   else if (digitalRead(SWITCH_MAIN4_3PST_POS2) == 1)  switchCenter[5] = 2;
   else                                                switchCenter[5] = 1;
@@ -168,6 +170,11 @@ void loop()
   else if (digitalRead(TOGGLE_BUTTON2_UP)   == 1)     toggleButton[1] =  1; // -> up
   else                                                toggleButton[1] =  0;
 
+  // temporär verwendet zum Umschalten der Anzeige
+  if      (toggleButton[0] !=  0) screen = 2;
+  if      (toggleButton[1] ==  1) screen = 1;
+  else if (toggleButton[1] == -1) screen = 0;
+  
 
   ppm[0] = map(thrust.value,    POTI_JOYSTICK1_MIN, POTI_JOYSTICK1_MAX, PPM_CENTER_VALUE-PPM_LEVEL, PPM_CENTER_VALUE+PPM_LEVEL);
   ppm[1] = map(rudder.value,    POTI_JOYSTICK2_MIN, POTI_JOYSTICK2_MAX, PPM_CENTER_VALUE-PPM_LEVEL, PPM_CENTER_VALUE+PPM_LEVEL);
@@ -235,15 +242,25 @@ void updateDisplay()
   if (millis() > updateTime)
   {
     byte i = 0;
-    byte  values[8];
-    values[i++] = highByte((unsigned int)  ppm[0]);
-    values[i++] = lowByte( (unsigned int)  ppm[0]);
-    values[i++] = highByte((unsigned int)  ppm[1]);
-    values[i++] = lowByte( (unsigned int)  ppm[1]);
-    values[i++] = highByte((unsigned int)  ppm[2]);
-    values[i++] = lowByte( (unsigned int)  ppm[2]);
-    values[i++] = highByte((unsigned int)  ppm[3]);
-    values[i++] = lowByte( (unsigned int)  ppm[3]);
+    byte  values[18];
+    values[i++] = highByte((unsigned int)  thrust.value);
+    values[i++] = lowByte( (unsigned int)  thrust.value);
+    values[i++] = highByte((unsigned int)  rudder.value);
+    values[i++] = lowByte( (unsigned int)  rudder.value);
+    values[i++] = highByte((unsigned int)  elevator.value);
+    values[i++] = lowByte( (unsigned int)  elevator.value);
+    values[i++] = highByte((unsigned int)  aileron.value);
+    values[i++] = lowByte( (unsigned int)  aileron.value);
+    values[i++] = highByte((unsigned int)  thrust.trimm);
+    values[i++] = lowByte( (unsigned int)  thrust.trimm);
+    values[i++] = highByte((unsigned int)  rudder.trimm);
+    values[i++] = lowByte( (unsigned int)  rudder.trimm);
+    values[i++] = highByte((unsigned int)  elevator.trimm);
+    values[i++] = lowByte( (unsigned int)  elevator.trimm);
+    values[i++] = highByte((unsigned int)  aileron.trimm);
+    values[i++] = lowByte( (unsigned int)  aileron.trimm);
+    values[i++] = highByte((unsigned int)  screen);
+    values[i++] = lowByte( (unsigned int)  screen);
 
     // Senden des Datenblocks
     Serial1.write(SERIAL_START);
