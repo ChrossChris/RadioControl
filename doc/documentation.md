@@ -38,9 +38,13 @@
 ![](./img/Body_Display_Housing_7.jpg)
 ![](./img/Body_Display_Housing_Final.jpg)
 
-## Mounting- und Gateway-Board: Arduino Mega und Nano
+## Mounting- und Gateway-Board: Arduino Mega
+Nur das untere Board für den Arduino Mega ist korrekt. Die Display-Anbindung wurde überarbeitet.
 ![](./img/Arduino_Mounting_Boards_1.jpg)
 ![](./img/Arduino_Mounting_Boards_2.jpg)
+
+## Mounting- und Gateway-Board: Arduino Nano und Display
+![](./img/Arduino_Mounting_Boards_3_Display.jpg)
 
 ## Innenausbau: Anschluss Arduino Boards
 ![](./img/Connection_Board_Servos_and_MainCentral.jpg)
@@ -50,4 +54,5 @@
 ![](./img/Body_Outside_complete.jpg)
 
 ## Finaler Stand
+LEDs für die Betriebsanzeige sind noch zu ergänzen.
 ![](./img/RadioControl_final.jpg)
