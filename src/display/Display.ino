@@ -7,7 +7,7 @@
 RREFont font;
 
 // Serielle Schnittstelle
-#define BAUD_RATE                 57600
+#define BAUD_RATE                 9600
 #define SERIAL_START              255
 #define SERIAL_END                128
 #define UPDATE_PERIOD             100
@@ -21,8 +21,11 @@ RREFont font;
 #define RESET         8
 ILI9341 tft = ILI9341(DATA, RESET, CHIP_SELECT);
 
-#define BUZZER        3
-#define UBATTREF      7
+#define BUZZER            3
+#define PIN_UBATTREF      0
+#define PIN_UBATTLEVEL    1
+#define UBATTREF          2.918F
+#define UZENER            4.58F
 
 
 
@@ -75,16 +78,35 @@ int   thrustTrim     = 0;
 int   rudderTrim     = 0;
 int   elevatorTrim   = 0;
 int   aileronTrim    = 0;
-int   uBattRef       = 0;
+int   potiMain       = 0;
+int   potiCenterLeft = 0;
+int   potiCenterRight= 0;
+int   potiLeft1      = 0;
+int   potiLeft2      = 0;
+int   potiRight1     = 0;
+int   potiRight2Cont = 0;
+
+int8_t  switchLeft[2]       = {0};
+int8_t  switchRight[2]      = {0};
+int8_t  switchRightRotary   = 0;
+int8_t  buttonRight         = 0;
+int8_t  switchCenter[6]     = {0};
+int8_t  toggleButton[2]     = {0};
+
 int   screen         = 0;
-  
+int   screen_old     = 0;
+int   uBattRef       = 0;
+int   uBattLevel     = 0;
+
+
 
 void loop(void)
 {
   static int counter = 0;
+  byte   buffer      = 0;
   // ----------------------------------------------------------------------------------
   // Datenstrom entsprechend Protokoll über die serielle Schnittstelle einlesen
-  byte rxMsg[20] = {0};
+  byte rxMsg[25] = {0};
   byte amount    = 0;
 
   byte rxByte = 0;
@@ -102,21 +124,93 @@ void loop(void)
     }
   }
   Serial.readBytes(rxMsg, amount);
-  uBattRef = analogRead(UBATTREF);
+  
+  uBattRef   = analogRead(PIN_UBATTREF);
+  uBattLevel = analogRead(PIN_UBATTLEVEL);
 
 
   // ----------------------------------------------------------------------------------
   // Empfangene Daten verarbeiten und interpretieren
-  thrustValue   = (unsigned int)  word(rxMsg[ 0],rxMsg[ 1]);  
-  rudderValue   = (unsigned int)  word(rxMsg[ 2],rxMsg[ 2]);  
-  elevatorValue = (unsigned int)  word(rxMsg[ 4],rxMsg[ 5]);  
-  aileronValue  = (unsigned int)  word(rxMsg[ 6],rxMsg[ 7]);  
-  thrustTrim    = (unsigned int)  word(rxMsg[ 8],rxMsg[ 9]);  
-  rudderTrim    = (unsigned int)  word(rxMsg[10],rxMsg[11]);  
-  elevatorTrim  = (unsigned int)  word(rxMsg[12],rxMsg[13]);  
-  aileronTrim   = (unsigned int)  word(rxMsg[14],rxMsg[15]);  
-  screen        = (unsigned int)  word(rxMsg[16],rxMsg[17]);
-  
+  screen = rxMsg[0];
+  byte idxMsg = 1;
+
+  switch (screen)
+  {
+    case 0:
+      if (amount != 11) break;
+      thrustValue     = word(rxMsg[idxMsg+0],rxMsg[idxMsg+1]);
+      rudderValue     = word(rxMsg[idxMsg+2],rxMsg[idxMsg+3]);
+      elevatorValue   = word(rxMsg[idxMsg+4],rxMsg[idxMsg+5]);
+      aileronValue    = word(rxMsg[idxMsg+6],rxMsg[idxMsg+7]);
+      break;
+      
+    case 1:
+      if (amount != 11) break;
+      thrustTrim      = word(rxMsg[idxMsg+0],rxMsg[idxMsg+1]);
+      rudderTrim      = word(rxMsg[idxMsg+2],rxMsg[idxMsg+3]);
+      elevatorTrim    = word(rxMsg[idxMsg+4],rxMsg[idxMsg+5]);
+      aileronTrim     = word(rxMsg[idxMsg+6],rxMsg[idxMsg+7]);
+      break;
+      
+    case 2:
+      if (amount != 9) break;
+      potiMain        = word(rxMsg[idxMsg+0],rxMsg[idxMsg+1]);
+      potiCenterLeft  = word(rxMsg[idxMsg+2],rxMsg[idxMsg+3]);
+      potiCenterRight = word(rxMsg[idxMsg+4],rxMsg[idxMsg+5]);
+      break;
+
+    case 3:
+      if (amount != 11) break;
+      potiLeft1       = word(rxMsg[idxMsg+0],rxMsg[idxMsg+1]);
+      potiLeft2       = word(rxMsg[idxMsg+2],rxMsg[idxMsg+3]);
+      potiRight1      = word(rxMsg[idxMsg+4],rxMsg[idxMsg+5]);
+      potiRight2Cont  = word(rxMsg[idxMsg+6],rxMsg[idxMsg+7]);
+      break;
+
+    case 4:
+      if (amount != 7) break;
+
+      buffer = rxMsg[idxMsg+0];
+      bitWrite(switchLeft[0],0,bitRead(buffer,0));
+      bitWrite(switchLeft[1],0,bitRead(buffer,1));
+      bitWrite(switchRight[0],0,bitRead(buffer,2));
+      bitWrite(switchRight[0],1,bitRead(buffer,3));
+      bitWrite(switchRight[1],0,bitRead(buffer,4));
+      bitWrite(switchRight[1],1,bitRead(buffer,5));
+      bitWrite(switchRightRotary,0,bitRead(buffer,6));
+      bitWrite(switchRightRotary,1,bitRead(buffer,7));
+
+      buffer = rxMsg[idxMsg+1];
+      bitWrite(buttonRight,0,bitRead(buffer,0));
+      bitWrite(switchCenter[0],0,bitRead(buffer,1));
+      bitWrite(switchCenter[0],1,bitRead(buffer,2));
+      bitWrite(switchCenter[1],0,bitRead(buffer,3));
+      bitWrite(switchCenter[1],1,bitRead(buffer,4));
+      bitWrite(switchCenter[2],0,bitRead(buffer,5));
+      bitWrite(switchCenter[2],1,bitRead(buffer,6));
+
+      buffer = rxMsg[idxMsg+2];
+      bitWrite(switchCenter[3],0,bitRead(buffer,0));
+      bitWrite(switchCenter[3],1,bitRead(buffer,1));
+      bitWrite(switchCenter[4],0,bitRead(buffer,2));
+      bitWrite(switchCenter[4],1,bitRead(buffer,3));
+      bitWrite(switchCenter[5],0,bitRead(buffer,4));
+      bitWrite(switchCenter[5],1,bitRead(buffer,5));
+
+      buffer = rxMsg[idxMsg+3];
+      toggleButton[0] = 0;
+      toggleButton[1] = 0;
+      bitWrite(toggleButton[0],0,bitRead(buffer,0));
+      bitWrite(toggleButton[0],1,bitRead(buffer,1));
+      bitWrite(toggleButton[0],2,bitRead(buffer,2));
+      bitWrite(toggleButton[1],0,bitRead(buffer,3));
+      bitWrite(toggleButton[1],1,bitRead(buffer,4));
+      bitWrite(toggleButton[1],2,bitRead(buffer,5));
+      toggleButton[0] -= 3;
+      toggleButton[1] -= 3;
+  }
+
+  if (screen != screen_old) tft.clearScreen();
 
   if (screen == 0)
   {
@@ -134,25 +228,78 @@ void loop(void)
   }
   else if (screen == 2)
   {
-    setLevelMeter("Battery",        uBattRef,      0, 1023, 0);
-    setLevelMeter("Rudder Value",   rudderValue,   0, 1023, 1);
-    setLevelMeter("Elevator Value", elevatorValue, 0, 1023, 2);
-    setLevelMeter("Aileron Value",  aileronValue,  0, 1023, 3);
+    float uBatt = (UZENER + UBATTREF * uBattLevel/uBattRef) * 1000.0f;
+    setLevelMeter("Poti Main",        potiMain,       0, 1023,  0);
+    setLevelMeter("Poti Center Left", potiCenterLeft, 0, 1023,  1);
+    setLevelMeter("Poti Center Right",potiCenterRight,0, 1023,  2);
+    setLevelMeter("Battery [mV]",     uBatt,          0, 10000, 3);
   }
-//  else
-//  {
-//    setLevelMeter("Screen",         screen,      0, 1023, 0);
-//    setLevelMeter("Screen",         screen,      0, 1023, 1);
-//    setLevelMeter("Screen",         screen,      0, 1023, 2);
-//    setLevelMeter("Screen",         screen,      0, 1023, 3);
-//  }
+  else if (screen == 3)
+  {
+    setLevelMeter("Poti Left 1",      potiLeft1,      0, 1023, 0);
+    setLevelMeter("Poti Left 2",      potiLeft2,      0, 1023, 1);
+    setLevelMeter("Poti Right 1",     potiRight1,     0, 1023, 2);
+    setLevelMeter("Poti Right 2",     potiRight2Cont, 0, 1023, 3);
+  }
+
+  else if (screen == 4)
+  {
+    char text[50];
+    sprintf(text,"Schalter und Taster");
+    setText(text,0);
+    sprintf(text,"----------------------------------");
+    setText(text,1);
+    
+    sprintf(text,"SW_L1: %d   |   SW_L2: %d   |   Button: %d", switchLeft[0], switchLeft[1], buttonRight);
+    setText(text,2);
+    
+    sprintf(text,"SW_R1: %d   |   SW_R2: %d   |   SW_Rotary: %d", switchRight[0], switchRight[1], switchRightRotary);
+    setText(text,3);
+  
+    sprintf(text,"SW_C1: %d   |   SW_C2: %d   |   SW_C3: %d", switchCenter[0], switchCenter[1], switchCenter[2]);
+    setText(text,4);
+    
+    sprintf(text,"SW_C4: %d   |   SW_C5: %d   |   SW_C6: %d", switchCenter[3], switchCenter[4], switchCenter[5]);
+    setText(text,5);
+
+    sprintf(text,"ToggleButton1: %3d", toggleButton[0]);
+    setText(text,6);
+    
+    sprintf(text,"ToggleButton2: %3d", toggleButton[1]);
+    setText(text,7);
+
+    sprintf(text,"Rising: +/-3   Cons: +/-1  Falling: +/-1");
+    setText(text,8,ALIGN_CENTER);
+    
+    sprintf(text,"Für Screenwechsel zusätzlich Taster!");
+    setText(text,9,ALIGN_CENTER);
+  }
+
+  screen_old = screen;
+
+//  screen = 4;
+//  switchLeft[0]++;
+//  switchLeft[1]++;
+//  switchRight[0]++;
+//  switchRight[1]++;
+//  switchRightRotary++;
+//  buttonRight++;
+//  switchCenter[0]++;
+//  switchCenter[1]++;
+//  switchCenter[2]++;
+//  switchCenter[3]++;
+//  switchCenter[4]++;
+//  switchCenter[5]++;
+//  toggleButton[0]++;
+//  toggleButton[1]++;
+  
 
 
   counter++;
   if (counter >= 100)
   {
     tone(BUZZER, 500);
-    delay(500
+    delay(150);
     noTone(BUZZER);
     counter = 0;
   }

@@ -17,16 +17,16 @@ void setLevelMeter(const char *text, int value, const int minValue, const int ma
   
   
   int level;
-  char out[8];
+  char out[] = "                         ";
   
   font.setColor(WHITE,BLACK);
   font.setCharMinWd(13);
   font.setFont(&rre_term_10x16);
-  font.printStr(0, y0, "                     ");
+  font.printStr(0, y0, out);
   font.printStr(0, y0, text);
     
   font.setFont(&rre_term_10x16);
-  sprintf(out,"%4d",value);
+  sprintf(out,"%6d",value);
   font.printStr(ALIGN_RIGHT,y0+5,out);
 
   y0 += dy;
@@ -78,46 +78,19 @@ void setLevelMeter(const char *text, int value, const int minValue, const int ma
 
 }
 
+void setText(const char *text, const int line)
+{
+  setText(text, line, 0);
+}
+
+void setText(const char *text, const int line, const int alignment)
+{
+  const int x0 = BORDER_OFFSET;
+  const int y0 = (line * (TFT_HEIGHT-BORDER_OFFSET)) / 10;
   
-//  // Initial einmal alles löschen (ging auch durch Auffüllen der übrigen Zeichen, aber
-//  // Code-Effizienz plus Sonderfall ohne Ausschlag gegenüber Verständlichkeit hat verloren ;-)
-//
-//  for (int idx = DISPLAY_WIDTH - sizeLevelMeter; idx < DISPLAY_WIDTH; idx++)  str[idx] = ' ';
-//
-//  // Sinnvoller Wert übergeben, für die die Anzeige generiert werden kann?  
-//  if      ((sizeLevelMeter < 1) || (sizeLevelMeter > 20))  sprintf(str,"ERR: levelMeter OoS ");
-//  else if (minValue >  0 )                                 sprintf(str,"ERR: minValue > 0   ");
-//  else if (maxValue <= 0 )                                 sprintf(str,"ERR: maxValue < 0   "); 
-//
-//  // Eigentliche Ausgabe 
-//  else if (minValue < 0)
-//  {
-//    if ( (sizeLevelMeter % 2) == 0)  sizeLevelMeter--;
-//    int i0  = DISPLAY_WIDTH - sizeLevelMeter / 2 - 1;
-//    str[i0] = '|';
-//    if (value < 0) 
-//    {
-//      int digits = map(abs(value), 0, abs(minValue), 0, sizeLevelMeter/2 + 1);
-//      if (digits > sizeLevelMeter/2)            digits      = sizeLevelMeter/2;
-//      for (int idx = 1; idx < digits; idx++)    str[i0-idx] = '-';
-//      str[i0 - digits] = '<';
-//    }
-//    else if (value > 0) 
-//    {
-//      int digits = map(value, 0, maxValue, 0, sizeLevelMeter/2 + 1);
-//      if (digits > sizeLevelMeter/2)            digits      = sizeLevelMeter/2;
-//      for (int idx = 1; idx < digits; idx++)    str[i0+idx] = '-';
-//      str[i0 + digits] = '>';
-//    }
-//  }
-//
-//  // Balkenanzeige von null bis zum Maximalwert
-//  else
-//  {
-//    int i0     = DISPLAY_WIDTH - sizeLevelMeter;
-//    int digits = map(value, minValue, maxValue, 0, sizeLevelMeter*2+1);
-//    digits     = constrain(digits, 0, sizeLevelMeter*2);
-//    for (int idx = 0;        idx < digits/2; idx++)        str[i0+idx]        = 0xDB;
-//    if ((digits % 2) == 1)                                 str[i0 + digits/2] = '>';
-//  }
-//}
+  font.setColor(WHITE,BLACK);
+  font.setCharMinWd(13);
+  font.setFont(&rre_term_10x16);
+  font.printStr(alignment, y0, "                         ");
+  font.printStr(alignment, y0, text);
+}    
