@@ -14,5 +14,5 @@ void updateDebugMonitor()
     switchCenter[0], switchCenter[1], switchCenter[2],    switchCenter[3], switchCenter[4], switchCenter[5],
     toggleButton[0], toggleButton[1], switchLeft[0],      switchLeft[1],
     switchRight[0],  switchRight[1],  switchRightRotary,  buttonRight);
-  Serial.print(out);
+  //Serial.print(out);
 }

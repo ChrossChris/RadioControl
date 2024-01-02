@@ -1,0 +1,14 @@
+#ifndef DEFINITIONS
+#define DEFINITIONS
+
+struct Screen1
+{
+	int16_t thrustValue 	= 128;
+	int16_t rudderValue 	= 256;
+	int16_t elevatorValue = 512;
+	int16_t aileronValue	= 768;
+	
+};
+
+
+#endif

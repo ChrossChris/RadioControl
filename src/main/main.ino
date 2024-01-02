@@ -1,13 +1,15 @@
 #include <util/atomic.h>
+#include "C:/Dokumente/Elektronik & Modellbau/Fernsteuerung_FM6014/git-repository/inc/definitions.h"
+
 
 #define DEBUG_MODE                true
 #define POTI_CENTER               512
 
 // Serielle Schnittstelle
-#define BAUD_RATE                 9600
+#define BAUD_RATE                 57600
 #define SERIAL_START              255
 #define SERIAL_END                128
-#define UPDATE_PERIOD             200
+#define UPDATE_PERIOD             300
 
 // Analoge Ports
 #define JOYSTICK1                 A0
@@ -98,8 +100,8 @@ int  ppmISR[PPM_CHANNELS] = {PPM_CENTER_VALUE};
 
 struct Joystick
 {
-  int value = 0;
-  int trimm = 0;
+  int16_t value = 0;
+  int16_t trimm = 0;
 };
 
 
@@ -122,7 +124,7 @@ int     screen = 0;
 
 void setup()
 {
-  if (DEBUG_MODE)  initDebugMonitor();
+  if (DEBUG_MODE) initDebugMonitor();
   Serial1.begin(BAUD_RATE);
   for (int8_t i_port = INPUT_PORT_FIRST; i_port <= INPUT_PORT_LAST; i_port++) pinMode(i_port, INPUT);
   pinMode(LED_YELLOW, OUTPUT);
@@ -284,18 +286,26 @@ void updateDisplay()
   byte i = 0;
   byte values[25] = {0};
   byte buffer = 0;
-  values[i++] = lowByte( screen);
+  values[i++] = lowByte(screen);
+
+  Screen1 screen0;
 
   if (screen == 0)
   {
-    values[i++] = highByte(thrust.value);
-    values[i++] = lowByte( thrust.value);
-    values[i++] = highByte(rudder.value);
-    values[i++] = lowByte( rudder.value);
-    values[i++] = highByte(elevator.value);
-    values[i++] = lowByte( elevator.value);
-    values[i++] = highByte(aileron.value);
-    values[i++] = lowByte( aileron.value);
+//    values[i++] = highByte(thrust.value);
+//    values[i++] = lowByte( thrust.value);
+//    values[i++] = highByte(rudder.value);
+//    values[i++] = lowByte( rudder.value);
+//    values[i++] = highByte(elevator.value);
+//    values[i++] = lowByte( elevator.value);
+//    values[i++] = highByte(aileron.value);
+//    values[i++] = lowByte( aileron.value);
+
+    screen0.thrustValue   = thrust.value;
+    screen0.rudderValue   = rudder.value;
+    screen0.elevatorValue = elevator.value;
+    screen0.aileronValue  = aileron.value;
+    i += sizeof(Screen1);
   }
   
   else if (screen == 1)
@@ -379,9 +389,16 @@ void updateDisplay()
   Serial1.write(SERIAL_START);
   Serial1.write(SERIAL_START);
   Serial1.write(i + 2); 
-  for (int idx = 0; idx < i; idx++)  Serial1.write(values[idx]);
+  if (screen != 0) for (int idx = 0; idx < i; idx++)  Serial1.write(values[idx]);
+  else
+  {
+    //for (int idx = 0; idx < i-sizeof(Screen1); idx++)  Serial1.write(values[idx]);
+    Serial1.write(values[0]);
+    Serial1.write((const byte*)&screen0, sizeof(Screen1));
+  }
   Serial1.write(SERIAL_END);
   Serial1.write(SERIAL_END);
+
 
   // Nächste Aktualisierung des Displays bestimmen
   updateTime = millis() + UPDATE_PERIOD;

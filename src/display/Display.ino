@@ -1,16 +1,16 @@
 #include <SPI.h>
 #include <Adafruit_GFX.h>
 #include <ILI9341_Fast.h>
+#include "C:/Dokumente/Elektronik & Modellbau/Fernsteuerung_FM6014/git-repository/inc/definitions.h"
 
 #include "RREFont.h"
 #include "rre_term_10x16.h"
 RREFont font;
 
 // Serielle Schnittstelle
-#define BAUD_RATE                 9600
+#define BAUD_RATE                 57600
 #define SERIAL_START              255
 #define SERIAL_END                128
-#define UPDATE_PERIOD             100
 
 // ILI9341 240x320 2.4" tft
 #define TFT_WIDTH     320
@@ -137,11 +137,20 @@ void loop(void)
   switch (screen)
   {
     case 0:
-      if (amount != 11) break;
-      thrustValue     = word(rxMsg[idxMsg+0],rxMsg[idxMsg+1]);
-      rudderValue     = word(rxMsg[idxMsg+2],rxMsg[idxMsg+3]);
-      elevatorValue   = word(rxMsg[idxMsg+4],rxMsg[idxMsg+5]);
-      aileronValue    = word(rxMsg[idxMsg+6],rxMsg[idxMsg+7]);
+//      if (amount != 11+sizeof(Screen1)) break;
+//      thrustValue     = word(rxMsg[idxMsg+0],rxMsg[idxMsg+1]);
+//      rudderValue     = word(rxMsg[idxMsg+2],rxMsg[idxMsg+3]);
+//      elevatorValue   = word(rxMsg[idxMsg+4],rxMsg[idxMsg+5]);
+//      aileronValue    = word(rxMsg[idxMsg+6],rxMsg[idxMsg+7]);
+//
+
+      Screen1* screen0;
+      screen0 = (Screen1*) (rxMsg+idxMsg);
+
+      thrustValue = screen0->thrustValue;
+      rudderValue = screen0->rudderValue;
+      elevatorValue = screen0->elevatorValue;
+      aileronValue = screen0->aileronValue;
       break;
       
     case 1:
@@ -218,6 +227,15 @@ void loop(void)
     setLevelMeter("Rudder Value",   rudderValue,   0, 1023, 1);
     setLevelMeter("Elevator Value", elevatorValue, 0, 1023, 2);
     setLevelMeter("Aileron Value",  aileronValue,  0, 1023, 3);
+//
+//    char text[50];
+//   
+//    sprintf(text,"Thrust: %d ", thrustValue);
+//    setText(text,0);
+//    sprintf(text,"Rudder: %d ", rudderValue);
+//    setText(text,1);
+
+    
   }
   else if (screen == 1)
   {
@@ -276,24 +294,6 @@ void loop(void)
   }
 
   screen_old = screen;
-
-//  screen = 4;
-//  switchLeft[0]++;
-//  switchLeft[1]++;
-//  switchRight[0]++;
-//  switchRight[1]++;
-//  switchRightRotary++;
-//  buttonRight++;
-//  switchCenter[0]++;
-//  switchCenter[1]++;
-//  switchCenter[2]++;
-//  switchCenter[3]++;
-//  switchCenter[4]++;
-//  switchCenter[5]++;
-//  toggleButton[0]++;
-//  toggleButton[1]++;
-  
-
 
   counter++;
   if (counter >= 100)
