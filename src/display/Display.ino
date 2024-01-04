@@ -43,6 +43,7 @@ struct ToneSequence
   int duration  = 0;
   int pause     = 0;
 };
+
 typedef ToneSequence TS;
 
 // needed for RREFont library initialization, define your fillRect
@@ -69,45 +70,17 @@ void setup()
 
 }
 
-
-int   thrustValue    = 0;
-int   rudderValue    = 0;
-int   elevatorValue  = 0;
-int   aileronValue   = 0;
-int   thrustTrim     = 0;
-int   rudderTrim     = 0;
-int   elevatorTrim   = 0;
-int   aileronTrim    = 0;
-int   potiMain       = 0;
-int   potiCenterLeft = 0;
-int   potiCenterRight= 0;
-int   potiLeft1      = 0;
-int   potiLeft2      = 0;
-int   potiRight1     = 0;
-int   potiRight2Cont = 0;
-
-int8_t  switchLeft[2]       = {0};
-int8_t  switchRight[2]      = {0};
-int8_t  switchRightRotary   = 0;
-int8_t  buttonRight         = 0;
-int8_t  switchCenter[6]     = {0};
-int8_t  toggleButton[2]     = {0};
-
-int   screen         = 0;
-int   screen_old     = 0;
-int   uBattRef       = 0;
-int   uBattLevel     = 0;
-
-
-
 void loop(void)
 {
+  const int uBattRef   = analogRead(PIN_UBATTREF);
+  const int uBattLevel = analogRead(PIN_UBATTLEVEL);
+  float     uBatt      = (UZENER + UBATTREF * uBattLevel/uBattRef) * 1000.0f;
+
+  static int8_t screen_old = 0;
+
   static int counter = 0;
-  byte   buffer      = 0;
   // ----------------------------------------------------------------------------------
   // Datenstrom entsprechend Protokoll über die serielle Schnittstelle einlesen
-  byte rxMsg[25] = {0};
-  byte amount    = 0;
 
   byte rxByte = 0;
   while (1)
@@ -118,150 +91,118 @@ void loop(void)
       if ((rxByte == SERIAL_START) && (Serial.peek() == SERIAL_START)) 
       {
         Serial.read(); // Zweite Start-Byte verwerfen
-        amount = Serial.read();
         break;
       }
     }
   }
-  Serial.readBytes(rxMsg, amount);
-  
-  uBattRef   = analogRead(PIN_UBATTREF);
-  uBattLevel = analogRead(PIN_UBATTLEVEL);
 
+  GeneralInfo generalInfo;
+  Serial.readBytes((byte*) &generalInfo, sizeof(GeneralInfo));
 
   // ----------------------------------------------------------------------------------
   // Empfangene Daten verarbeiten und interpretieren
-  screen = rxMsg[0];
-  byte idxMsg = 1;
+  if (generalInfo.screen != screen_old) tft.clearScreen();
 
-  switch (screen)
+  if (generalInfo.screen == SCREEN_JOYSTICK_VALUES)
   {
-    case 0:
-//      if (amount != 11+sizeof(Screen1)) break;
-//      thrustValue     = word(rxMsg[idxMsg+0],rxMsg[idxMsg+1]);
-//      rudderValue     = word(rxMsg[idxMsg+2],rxMsg[idxMsg+3]);
-//      elevatorValue   = word(rxMsg[idxMsg+4],rxMsg[idxMsg+5]);
-//      aileronValue    = word(rxMsg[idxMsg+6],rxMsg[idxMsg+7]);
-//
+    while (Serial.available() < sizeof(ScreenJoystickValues));
 
-      Screen1* screen0;
-      screen0 = (Screen1*) (rxMsg+idxMsg);
+    ScreenJoystickValues status_screen;
+    Serial.readBytes((byte*) &status_screen, sizeof(ScreenJoystickValues));
 
-      thrustValue = screen0->thrustValue;
-      rudderValue = screen0->rudderValue;
-      elevatorValue = screen0->elevatorValue;
-      aileronValue = screen0->aileronValue;
-      break;
-      
-    case 1:
-      if (amount != 11) break;
-      thrustTrim      = word(rxMsg[idxMsg+0],rxMsg[idxMsg+1]);
-      rudderTrim      = word(rxMsg[idxMsg+2],rxMsg[idxMsg+3]);
-      elevatorTrim    = word(rxMsg[idxMsg+4],rxMsg[idxMsg+5]);
-      aileronTrim     = word(rxMsg[idxMsg+6],rxMsg[idxMsg+7]);
-      break;
-      
-    case 2:
-      if (amount != 9) break;
-      potiMain        = word(rxMsg[idxMsg+0],rxMsg[idxMsg+1]);
-      potiCenterLeft  = word(rxMsg[idxMsg+2],rxMsg[idxMsg+3]);
-      potiCenterRight = word(rxMsg[idxMsg+4],rxMsg[idxMsg+5]);
-      break;
-
-    case 3:
-      if (amount != 11) break;
-      potiLeft1       = word(rxMsg[idxMsg+0],rxMsg[idxMsg+1]);
-      potiLeft2       = word(rxMsg[idxMsg+2],rxMsg[idxMsg+3]);
-      potiRight1      = word(rxMsg[idxMsg+4],rxMsg[idxMsg+5]);
-      potiRight2Cont  = word(rxMsg[idxMsg+6],rxMsg[idxMsg+7]);
-      break;
-
-    case 4:
-      if (amount != 7) break;
-
-      buffer = rxMsg[idxMsg+0];
-      bitWrite(switchLeft[0],0,bitRead(buffer,0));
-      bitWrite(switchLeft[1],0,bitRead(buffer,1));
-      bitWrite(switchRight[0],0,bitRead(buffer,2));
-      bitWrite(switchRight[0],1,bitRead(buffer,3));
-      bitWrite(switchRight[1],0,bitRead(buffer,4));
-      bitWrite(switchRight[1],1,bitRead(buffer,5));
-      bitWrite(switchRightRotary,0,bitRead(buffer,6));
-      bitWrite(switchRightRotary,1,bitRead(buffer,7));
-
-      buffer = rxMsg[idxMsg+1];
-      bitWrite(buttonRight,0,bitRead(buffer,0));
-      bitWrite(switchCenter[0],0,bitRead(buffer,1));
-      bitWrite(switchCenter[0],1,bitRead(buffer,2));
-      bitWrite(switchCenter[1],0,bitRead(buffer,3));
-      bitWrite(switchCenter[1],1,bitRead(buffer,4));
-      bitWrite(switchCenter[2],0,bitRead(buffer,5));
-      bitWrite(switchCenter[2],1,bitRead(buffer,6));
-
-      buffer = rxMsg[idxMsg+2];
-      bitWrite(switchCenter[3],0,bitRead(buffer,0));
-      bitWrite(switchCenter[3],1,bitRead(buffer,1));
-      bitWrite(switchCenter[4],0,bitRead(buffer,2));
-      bitWrite(switchCenter[4],1,bitRead(buffer,3));
-      bitWrite(switchCenter[5],0,bitRead(buffer,4));
-      bitWrite(switchCenter[5],1,bitRead(buffer,5));
-
-      buffer = rxMsg[idxMsg+3];
-      toggleButton[0] = 0;
-      toggleButton[1] = 0;
-      bitWrite(toggleButton[0],0,bitRead(buffer,0));
-      bitWrite(toggleButton[0],1,bitRead(buffer,1));
-      bitWrite(toggleButton[0],2,bitRead(buffer,2));
-      bitWrite(toggleButton[1],0,bitRead(buffer,3));
-      bitWrite(toggleButton[1],1,bitRead(buffer,4));
-      bitWrite(toggleButton[1],2,bitRead(buffer,5));
-      toggleButton[0] -= 3;
-      toggleButton[1] -= 3;
+    setLevelMeter("Thrust Value",   status_screen.thrustValue,   0, 1023, 0);
+    setLevelMeter("Rudder Value",   status_screen.rudderValue,   0, 1023, 1);
+    setLevelMeter("Elevator Value", status_screen.elevatorValue, 0, 1023, 2);
+    setLevelMeter("Aileron Value",  status_screen.aileronValue,  0, 1023, 3);
   }
 
-  if (screen != screen_old) tft.clearScreen();
-
-  if (screen == 0)
+  else if (generalInfo.screen == SCREEN_JOYSTICK_TRIM)
   {
-    setLevelMeter("Thrust Value",   thrustValue,   0, 1023, 0);
-    setLevelMeter("Rudder Value",   rudderValue,   0, 1023, 1);
-    setLevelMeter("Elevator Value", elevatorValue, 0, 1023, 2);
-    setLevelMeter("Aileron Value",  aileronValue,  0, 1023, 3);
-//
-//    char text[50];
-//   
-//    sprintf(text,"Thrust: %d ", thrustValue);
-//    setText(text,0);
-//    sprintf(text,"Rudder: %d ", rudderValue);
-//    setText(text,1);
+    while (Serial.available() < sizeof(ScreenJoystickTrim));
 
+    ScreenJoystickTrim status_screen;
+    Serial.readBytes((byte*) &status_screen, sizeof(ScreenJoystickTrim));
+
+    setLevelMeter("Thrust Trim",   status_screen.thrustTrim,   0, 1023, 0);
+    setLevelMeter("Rudder Trim",   status_screen.rudderTrim,   0, 1023, 1);
+    setLevelMeter("Elevator Trim", status_screen.elevatorTrim, 0, 1023, 2);
+    setLevelMeter("Aileron Trim",  status_screen.aileronTrim,  0, 1023, 3);
+  }
+
+  else if (generalInfo.screen == SCREEN_POTI_CENTER)
+  {
+    while (Serial.available() < sizeof(ScreenPotiCenter));
+
+    ScreenPotiCenter status_screen;
+    Serial.readBytes((byte*) &status_screen, sizeof(ScreenPotiCenter));
+
+    setLevelMeter("Poti Main",         status_screen.potiMain,       0, 1023,  0);
+    setLevelMeter("Poti Center Left",  status_screen.potiCenterLeft, 0, 1023,  1);
+    setLevelMeter("Poti Center Right", status_screen.potiCenterRight,0, 1023,  2);
+    setLevelMeter("Battery [mV]",      uBatt,                         0, 10000, 3);
+  }
+
+  else if (generalInfo.screen == SCREEN_POTI_LEFT_RIGHT)
+  {
+    while (Serial.available() < sizeof(ScreenPotiLeftRight));
+
+    ScreenPotiLeftRight status_screen;
+    Serial.readBytes((byte*) &status_screen, sizeof(ScreenPotiLeftRight));
+
+    setLevelMeter("Poti Left 1",  status_screen.potiLeft1,      0, 1023, 0);
+    setLevelMeter("Poti Left 2",  status_screen.potiLeft2,      0, 1023, 1);
+    setLevelMeter("Poti Right 1", status_screen.potiRight1,     0, 1023, 2);
+    setLevelMeter("Poti Right 2", status_screen.potiRight2Cont, 0, 1023, 3);
+  }
+
+  else if (generalInfo.screen == SCREEN_SWITCHES)
+  {
+    while (Serial.available() < 4);
+
+    uint8_t rxMsg[4];
+    Serial.readBytes((byte*) rxMsg, 4);
+
+    int8_t  switchLeft[2]       = {0};
+    int8_t  switchRight[2]      = {0};
+    int8_t  switchRightRotary   = 0;
+    int8_t  buttonRight         = 0;
+    int8_t  switchCenter[6]     = {0};
+    int8_t  toggleButton[2]     = {0};
     
-  }
-  else if (screen == 1)
-  {
-    setLevelMeter("Thrust Trim",   thrustTrim,   0, 1023, 0);
-    setLevelMeter("Rudder Trim",   rudderTrim,   0, 1023, 1);
-    setLevelMeter("Elevator Trim", elevatorTrim, 0, 1023, 2);
-    setLevelMeter("Aileron Trim",  aileronTrim,  0, 1023, 3);
-  }
-  else if (screen == 2)
-  {
-    float uBatt = (UZENER + UBATTREF * uBattLevel/uBattRef) * 1000.0f;
-    setLevelMeter("Poti Main",        potiMain,       0, 1023,  0);
-    setLevelMeter("Poti Center Left", potiCenterLeft, 0, 1023,  1);
-    setLevelMeter("Poti Center Right",potiCenterRight,0, 1023,  2);
-    setLevelMeter("Battery [mV]",     uBatt,          0, 10000, 3);
-  }
-  else if (screen == 3)
-  {
-    setLevelMeter("Poti Left 1",      potiLeft1,      0, 1023, 0);
-    setLevelMeter("Poti Left 2",      potiLeft2,      0, 1023, 1);
-    setLevelMeter("Poti Right 1",     potiRight1,     0, 1023, 2);
-    setLevelMeter("Poti Right 2",     potiRight2Cont, 0, 1023, 3);
-  }
+    bitWrite(switchLeft[0],     0, bitRead(rxMsg[0], 0));
+    bitWrite(switchLeft[1],     0, bitRead(rxMsg[0], 1));
+    bitWrite(switchRight[0],    0, bitRead(rxMsg[0], 2));
+    bitWrite(switchRight[1],    0, bitRead(rxMsg[0], 3));
+    bitWrite(switchRight[1],    1, bitRead(rxMsg[0], 4));
+    bitWrite(switchRightRotary, 0, bitRead(rxMsg[0], 5));
+    bitWrite(switchRightRotary, 1, bitRead(rxMsg[0], 6));
+    bitWrite(buttonRight,       0, bitRead(rxMsg[0], 7));
 
-  else if (screen == 4)
-  {
+    bitWrite(switchCenter[0],   0, bitRead(rxMsg[1], 0));
+    bitWrite(switchCenter[0],   1, bitRead(rxMsg[1], 1));
+    bitWrite(switchCenter[1],   0, bitRead(rxMsg[1], 2));
+    bitWrite(switchCenter[1],   1, bitRead(rxMsg[1], 3));
+    bitWrite(switchCenter[2],   0, bitRead(rxMsg[1], 4));
+    bitWrite(switchCenter[2],   1, bitRead(rxMsg[1], 5));
+    bitWrite(switchCenter[3],   0, bitRead(rxMsg[1], 6));
+    bitWrite(switchCenter[3],   1, bitRead(rxMsg[1], 7));
+
+    bitWrite(switchCenter[4],   0, bitRead(rxMsg[2], 0));
+    bitWrite(switchCenter[4],   1, bitRead(rxMsg[2], 1));
+    bitWrite(switchCenter[5],   0, bitRead(rxMsg[2], 2));
+    bitWrite(switchCenter[5],   1, bitRead(rxMsg[2], 3));
+
+    toggleButton[0] = 0;
+    toggleButton[1] = 0;
+    bitWrite(toggleButton[0],   0, bitRead(rxMsg[3], 0));
+    bitWrite(toggleButton[0],   1, bitRead(rxMsg[3], 1));
+    bitWrite(toggleButton[0],   2, bitRead(rxMsg[3], 2));
+    bitWrite(toggleButton[1],   0, bitRead(rxMsg[3], 3));
+    bitWrite(toggleButton[1],   1, bitRead(rxMsg[3], 4));
+    bitWrite(toggleButton[1],   2, bitRead(rxMsg[3], 5));
+    toggleButton[0] -= 3;
+    toggleButton[1] -= 3;
+
     char text[50];
     sprintf(text,"Schalter und Taster");
     setText(text,0);
@@ -293,7 +234,10 @@ void loop(void)
     setText(text,9,ALIGN_CENTER);
   }
 
-  screen_old = screen;
+  screen_old = generalInfo.screen;
+
+  Serial.write(SERIAL_START);
+  Serial.write(SERIAL_END);
 
   counter++;
   if (counter >= 100)

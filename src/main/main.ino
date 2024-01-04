@@ -120,7 +120,9 @@ int8_t  switchRightRotary   = 0;
 int8_t  buttonRight         = 0;
 int8_t  switchCenter[6]     = {0};
 int8_t  toggleButton[2]     = {0};
-int     screen = 0;
+int8_t  screen              = 0;
+
+
 
 void setup()
 {
@@ -150,7 +152,6 @@ void loop()
   potiLeft2       = analogRead(POTI_LEFT2);
   potiRight1      = analogRead(POTI_RIGHT1);
   potiRight2Cont  = analogRead(POTI_RIGHT2_CONT);
-
 
   switchLeft[0]  = digitalRead(SWITCH_LEFT1);
   switchLeft[1]  = digitalRead(SWITCH_LEFT2);
@@ -280,99 +281,93 @@ void updateDisplay()
   // Aktualisierung des Displays nur alle UPDATE_PERIOD, ansonsten
   // funktioniert die Kommunikation über die Schnittstelle nicht
 
-  
-  if (millis() < updateTime) return;
+  const bool updateTimeExceeded = millis() > updateTime;
+  const bool updateRequested    = false; // (Serial1.available() > 1) && (Serial.read() == SERIAL_START) && (Serial.read() == SERIAL_END);
 
-  byte i = 0;
-  byte values[25] = {0};
-  byte buffer = 0;
-  values[i++] = lowByte(screen);
+  if (!updateRequested && !updateTimeExceeded) return;
 
-  Screen1 screen0;
+  // Senden des Start-Datenblocks
+  Serial1.write(SERIAL_START);
+  Serial1.write(SERIAL_START);
 
-  if (screen == 0)
+  // Screen-Information -> Daraus bestimmt sich automatisch die Länge des Datenstroms
+  static GeneralInfo generalInfo;
+
+  generalInfo.screen = screen;
+  Serial1.write((const byte*) &generalInfo, sizeof(GeneralInfo));
+
+  if (generalInfo.screen == SCREEN_JOYSTICK_VALUES)
   {
-//    values[i++] = highByte(thrust.value);
-//    values[i++] = lowByte( thrust.value);
-//    values[i++] = highByte(rudder.value);
-//    values[i++] = lowByte( rudder.value);
-//    values[i++] = highByte(elevator.value);
-//    values[i++] = lowByte( elevator.value);
-//    values[i++] = highByte(aileron.value);
-//    values[i++] = lowByte( aileron.value);
-
-    screen0.thrustValue   = thrust.value;
-    screen0.rudderValue   = rudder.value;
-    screen0.elevatorValue = elevator.value;
-    screen0.aileronValue  = aileron.value;
-    i += sizeof(Screen1);
+    static ScreenJoystickValues status_screen;
+    status_screen.thrustValue   = thrust.value;
+    status_screen.rudderValue   = rudder.value;
+    status_screen.elevatorValue = elevator.value;
+    status_screen.aileronValue  = aileron.value;
+    Serial1.write((const byte*) &status_screen, sizeof(ScreenJoystickValues));
   }
   
-  else if (screen == 1)
+  else if (generalInfo.screen == SCREEN_JOYSTICK_TRIM)
   {
-    values[i++] = highByte(thrust.trimm);
-    values[i++] = lowByte( thrust.trimm);
-    values[i++] = highByte(rudder.trimm);
-    values[i++] = lowByte( rudder.trimm);
-    values[i++] = highByte(elevator.trimm);
-    values[i++] = lowByte( elevator.trimm);
-    values[i++] = highByte(aileron.trimm);
-    values[i++] = lowByte( aileron.trimm);
+    static ScreenJoystickTrim status_screen;
+    status_screen.thrustTrim   = thrust.trimm;
+    status_screen.rudderTrim   = rudder.trimm;
+    status_screen.elevatorTrim = elevator.trimm;
+    status_screen.aileronTrim  = aileron.trimm;
+    Serial1.write((const byte*) &status_screen, sizeof(ScreenJoystickTrim));
   }
 
-  else if (screen == 2)
+  else if (generalInfo.screen == SCREEN_POTI_CENTER)
   {
-    values[i++] = highByte(potiMain);
-    values[i++] = lowByte( potiMain);
-    values[i++] = highByte(potiCenterLeft);
-    values[i++] = lowByte( potiCenterLeft);
-    values[i++] = highByte(potiCenterRight);
-    values[i++] = lowByte( potiCenterRight);
+    static ScreenPotiCenter status_screen;
+    status_screen.potiMain        = potiMain;
+    status_screen.potiCenterLeft  = potiCenterLeft;
+    status_screen.potiCenterRight = potiCenterRight;
+    Serial1.write((const byte*) &status_screen, sizeof(ScreenPotiCenter));
   }
 
-  else if (screen == 3)
+  else if (generalInfo.screen == SCREEN_POTI_LEFT_RIGHT)
   {
-    values[i++] = highByte(potiLeft1);
-    values[i++] = lowByte( potiLeft1);
-    values[i++] = highByte(potiLeft2);
-    values[i++] = lowByte( potiLeft2);
-    values[i++] = highByte(potiRight1);
-    values[i++] = lowByte( potiRight1);
-    values[i++] = highByte(potiRight2Cont);
-    values[i++] = lowByte( potiRight2Cont);
+    static ScreenPotiLeftRight status_screen;
+    status_screen.potiLeft1       = potiLeft1;
+    status_screen.potiLeft2       = potiLeft2;
+    status_screen.potiRight1      = potiRight1;
+    status_screen.potiRight2Cont  = potiRight2Cont;
+    Serial1.write((const byte*) &status_screen, sizeof(ScreenPotiLeftRight));
   }
 
-  else if (screen == 4)
+  else if (generalInfo.screen == SCREEN_SWITCHES)
   {
+    uint8_t values[4] = {0};
+    uint8_t buffer = 0;
+
     buffer = 0;
     bitWrite(buffer, 0, bitRead(switchLeft[0],0));
     bitWrite(buffer, 1, bitRead(switchLeft[1],0));
     bitWrite(buffer, 2, bitRead(switchRight[0],0));
-    bitWrite(buffer, 3, bitRead(switchRight[0],1));
-    bitWrite(buffer, 4, bitRead(switchRight[1],0));
-    bitWrite(buffer, 5, bitRead(switchRight[1],1));
-    bitWrite(buffer, 6, bitRead(switchRightRotary,0));
-    bitWrite(buffer, 7, bitRead(switchRightRotary,1));
-    values[i++] = buffer;
+    bitWrite(buffer, 3, bitRead(switchRight[1],0));
+    bitWrite(buffer, 4, bitRead(switchRight[1],1));
+    bitWrite(buffer, 5, bitRead(switchRightRotary,0));
+    bitWrite(buffer, 6, bitRead(switchRightRotary,1));
+    bitWrite(buffer, 7, bitRead(buttonRight,0));
+    values[0] = buffer;
     
     buffer = 0;
-    bitWrite(buffer, 0, bitRead(buttonRight,0));
-    bitWrite(buffer, 1, bitRead(switchCenter[0],0));
-    bitWrite(buffer, 2, bitRead(switchCenter[0],1));
-    bitWrite(buffer, 3, bitRead(switchCenter[1],0));
-    bitWrite(buffer, 4, bitRead(switchCenter[1],1));
-    bitWrite(buffer, 5, bitRead(switchCenter[2],0));
-    bitWrite(buffer, 6, bitRead(switchCenter[2],1));
-    values[i++] = buffer;
+    bitWrite(buffer, 0, bitRead(switchCenter[0],0));
+    bitWrite(buffer, 1, bitRead(switchCenter[0],1));
+    bitWrite(buffer, 2, bitRead(switchCenter[1],0));
+    bitWrite(buffer, 3, bitRead(switchCenter[1],1));
+    bitWrite(buffer, 4, bitRead(switchCenter[2],0));
+    bitWrite(buffer, 5, bitRead(switchCenter[2],1));
+    bitWrite(buffer, 6, bitRead(switchCenter[3],0));
+    bitWrite(buffer, 7, bitRead(switchCenter[3],1));
+    values[1] = buffer;
 
     buffer = 0;
-    bitWrite(buffer, 0, bitRead(switchCenter[3],0));
-    bitWrite(buffer, 1, bitRead(switchCenter[3],1));
-    bitWrite(buffer, 2, bitRead(switchCenter[4],0));
-    bitWrite(buffer, 3, bitRead(switchCenter[4],1));
-    bitWrite(buffer, 4, bitRead(switchCenter[5],0));
-    bitWrite(buffer, 5, bitRead(switchCenter[5],1));
-    values[i++] = buffer;
+    bitWrite(buffer, 0, bitRead(switchCenter[4],0));
+    bitWrite(buffer, 1, bitRead(switchCenter[4],1));
+    bitWrite(buffer, 2, bitRead(switchCenter[5],0));
+    bitWrite(buffer, 3, bitRead(switchCenter[5],1));
+    values[2] = buffer;
 
     buffer = 0;
     bitWrite(buffer, 0, bitRead(toggleButton[0]+3,0));
@@ -381,21 +376,12 @@ void updateDisplay()
     bitWrite(buffer, 3, bitRead(toggleButton[1]+3,0));
     bitWrite(buffer, 4, bitRead(toggleButton[1]+3,1));
     bitWrite(buffer, 5, bitRead(toggleButton[1]+3,2));
-    values[i++] = buffer;
-  }
-  
+    values[3] = buffer;
 
-  // Senden des Datenblocks
-  Serial1.write(SERIAL_START);
-  Serial1.write(SERIAL_START);
-  Serial1.write(i + 2); 
-  if (screen != 0) for (int idx = 0; idx < i; idx++)  Serial1.write(values[idx]);
-  else
-  {
-    //for (int idx = 0; idx < i-sizeof(Screen1); idx++)  Serial1.write(values[idx]);
-    Serial1.write(values[0]);
-    Serial1.write((const byte*)&screen0, sizeof(Screen1));
+    Serial1.write((const byte*) values, 4);
   }
+
+  // Senden des Abschluss-Datenblocks
   Serial1.write(SERIAL_END);
   Serial1.write(SERIAL_END);
 
@@ -403,7 +389,7 @@ void updateDisplay()
   // Nächste Aktualisierung des Displays bestimmen
   updateTime = millis() + UPDATE_PERIOD;
 }
-  // -----------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------
 
 
 
