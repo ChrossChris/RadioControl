@@ -7,17 +7,17 @@
 #define SCREEN_POTI_LEFT_RIGHT	 	3
 #define SCREEN_SWITCHES					 	4
 
-struct GeneralInfoBlock
+struct GeneralInfo
 {
 	int16_t	dummy1 = 0;
 	int16_t dummy2 = 0;
 	int16_t dummy3 = 0;
 	
-	int8_t  _screen = SCREEN_JOYSTICK_VALUES;
+	int8_t  screen = SCREEN_JOYSTICK_VALUES;
 };
 
 
-struct Screen_JoystickValues
+struct ScreenJoystickValues
 {
 	int16_t thrustValue 	= 0;
 	int16_t rudderValue 	= 0;
@@ -25,7 +25,7 @@ struct Screen_JoystickValues
 	int16_t aileronValue	= 0;
 };
 
-struct Screen_JoystickTrim
+struct ScreenJoystickTrim
 {
 	int16_t thrustTrim 	 = 0;
 	int16_t rudderTrim 	 = 0;
@@ -33,14 +33,14 @@ struct Screen_JoystickTrim
 	int16_t aileronTrim  = 0;
 };
 
-struct Screen_PotiCenter
+struct ScreenPotiCenter
 {
 	int16_t potiMain 				= 0;
 	int16_t potiCenterLeft  = 0;
 	int16_t potiCenterRight = 0;
 };
 
-struct Screen_PotiLeftRight
+struct ScreenPotiLeftRight
 {
 	int16_t potiLeft1      = 0;
   int16_t potiLeft2      = 0;
