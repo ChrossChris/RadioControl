@@ -1,7 +1,7 @@
 #include <SPI.h>
 #include <Adafruit_GFX.h>
 #include <ILI9341_Fast.h>
-#include "C:/Dokumente/Elektronik & Modellbau/Fernsteuerung_FM6014/git-repository/inc/definitions.h"
+#include "C:/Development/Elektronik/Fernsteuerung_FM6014/git-repository/inc/definitions.h"
 
 #include "RREFont.h"
 #include "rre_term_10x16.h"
@@ -26,6 +26,8 @@ ILI9341 tft = ILI9341(DATA, RESET, CHIP_SELECT);
 #define PIN_UBATTLEVEL    1
 #define UBATTREF          2.918F
 #define UZENER            4.58F
+#define MICRO_SECONDS     16
+
 
 
 
@@ -53,9 +55,21 @@ void customRect(int x, int y, int w, int h, int c)
 }
 
 
+uint16_t taskCtrDisplay = 0;
+
+struct DisplayCache
+{
+  int8_t screen = -1;
+  int16_t value[4] = {-32768, -32768, -32768, -32768};
+  uint32_t switches = 0xFFFFFFFFUL;
+};
+
+DisplayCache displayCache;
+
 void setup()
 {
- // put your setup code here, to run once:
+  
+  // put your setup code here, to run once:
   pinMode(TFT_POWER_ON, OUTPUT);
   digitalWrite(TFT_POWER_ON, HIGH);
 
@@ -65,109 +79,113 @@ void setup()
   font.init(customRect, TFT_WIDTH, TFT_HEIGHT);
   
   Serial.begin(BAUD_RATE);
-  
   pinMode(BUZZER, OUTPUT);
 
+  // Erstes Datenpaket sofort anfordern; der Sender hat zusätzlich ein Fallback.
+  Serial.write(SERIAL_START);
+  Serial.write(SERIAL_END);
 }
 
-void loop(void)
+
+void invalidateDisplayCache(int8_t screen)
 {
-  const int uBattRef   = analogRead(PIN_UBATTREF);
-  const int uBattLevel = analogRead(PIN_UBATTLEVEL);
-  float     uBatt      = (UZENER + UBATTREF * uBattLevel/uBattRef) * 1000.0f;
+  displayCache.screen = screen;
+  for (uint8_t i = 0; i < 4; i++) displayCache.value[i] = -32768;
+  displayCache.switches = 0xFFFFFFFFUL;
+}
 
-  static int8_t screen_old = 0;
-
-  static int counter = 0;
-  // ----------------------------------------------------------------------------------
-  // Datenstrom entsprechend Protokoll über die serielle Schnittstelle einlesen
-
-  byte rxByte = 0;
-  while (1)
+void updateMeter(const char *label, int16_t value, int maxValue, uint8_t line, int threshold)
+{
+  const bool firstDraw = displayCache.value[line] == -32768;
+  if (firstDraw || abs((long)value - (long)displayCache.value[line]) > threshold)
   {
-    if (Serial.available() > 2)
-    {
-      rxByte = Serial.read();
-      if ((rxByte == SERIAL_START) && (Serial.peek() == SERIAL_START)) 
-      {
-        Serial.read(); // Zweite Start-Byte verwerfen
-        break;
-      }
-    }
+    if (firstDraw) setLevelMeter(label, value, 0, maxValue, line);
+    else           setLevelMeterPartial(displayCache.value[line], value, 0, maxValue, line);
+    displayCache.value[line] = value;
   }
+}
 
-  GeneralInfo generalInfo;
-  Serial.readBytes((byte*) &generalInfo, sizeof(GeneralInfo));
+size_t payloadSizeForScreen(int8_t screen)
+{
+  if (screen == SCREEN_JOYSTICK_VALUES) return sizeof(ScreenJoystickValues);
+  if (screen == SCREEN_JOYSTICK_TRIM) return sizeof(ScreenJoystickTrim);
+  if (screen == SCREEN_POTI_CENTER) return sizeof(ScreenPotiCenter);
+  if (screen == SCREEN_POTI_LEFT_RIGHT) return sizeof(ScreenPotiLeftRight);
+  if (screen == SCREEN_SWITCHES) return 4;
+  return 0;
+}
 
-  // ----------------------------------------------------------------------------------
-  // Empfangene Daten verarbeiten und interpretieren
-  if (generalInfo.screen != screen_old) tft.clearScreen();
+void processPacket(const GeneralInfo &generalInfo, const uint8_t *payload)
+{
+  taskCtrDisplay++;
+
+  if (generalInfo.screen != displayCache.screen)
+  {
+    tft.clearScreen();
+    invalidateDisplayCache(generalInfo.screen);
+  }
 
   if (generalInfo.screen == SCREEN_JOYSTICK_VALUES)
   {
-    while (Serial.available() < sizeof(ScreenJoystickValues));
-
-    ScreenJoystickValues status_screen;
-    Serial.readBytes((byte*) &status_screen, sizeof(ScreenJoystickValues));
-
-    setLevelMeter("Thrust Value",   status_screen.thrustValue,   0, 1023, 0);
-    setLevelMeter("Rudder Value",   status_screen.rudderValue,   0, 1023, 1);
-    setLevelMeter("Elevator Value", status_screen.elevatorValue, 0, 1023, 2);
-    setLevelMeter("Aileron Value",  status_screen.aileronValue,  0, 1023, 3);
+    ScreenJoystickValues data;
+    memcpy(&data, payload, sizeof(data));
+    updateMeter("Thrust Value",   data.thrustValue,   1023, 0, 4);
+    updateMeter("Rudder Value",   data.rudderValue,   1023, 1, 4);
+    updateMeter("Elevator Value", data.elevatorValue, 1023, 2, 4);
+    updateMeter("Aileron Value",  data.aileronValue,  1023, 3, 4);
   }
-
   else if (generalInfo.screen == SCREEN_JOYSTICK_TRIM)
   {
-    while (Serial.available() < sizeof(ScreenJoystickTrim));
-
-    ScreenJoystickTrim status_screen;
-    Serial.readBytes((byte*) &status_screen, sizeof(ScreenJoystickTrim));
-
-    setLevelMeter("Thrust Trim",   status_screen.thrustTrim,   0, 1023, 0);
-    setLevelMeter("Rudder Trim",   status_screen.rudderTrim,   0, 1023, 1);
-    setLevelMeter("Elevator Trim", status_screen.elevatorTrim, 0, 1023, 2);
-    setLevelMeter("Aileron Trim",  status_screen.aileronTrim,  0, 1023, 3);
+    ScreenJoystickTrim data;
+    memcpy(&data, payload, sizeof(data));
+    updateMeter("Thrust Trim",   data.thrustTrim,   1023, 0, 4);
+    updateMeter("Rudder Trim",   data.rudderTrim,   1023, 1, 4);
+    updateMeter("Elevator Trim", data.elevatorTrim, 1023, 2, 4);
+    updateMeter("Aileron Trim",  data.aileronTrim,  1023, 3, 4);
   }
-
   else if (generalInfo.screen == SCREEN_POTI_CENTER)
   {
-    while (Serial.available() < sizeof(ScreenPotiCenter));
-
-    ScreenPotiCenter status_screen;
-    Serial.readBytes((byte*) &status_screen, sizeof(ScreenPotiCenter));
-
-    setLevelMeter("Poti Main",         status_screen.potiMain,       0, 1023,  0);
-    setLevelMeter("Poti Center Left",  status_screen.potiCenterLeft, 0, 1023,  1);
-    setLevelMeter("Poti Center Right", status_screen.potiCenterRight,0, 1023,  2);
-    setLevelMeter("Battery [mV]",      uBatt,                         0, 10000, 3);
+    ScreenPotiCenter data;
+    memcpy(&data, payload, sizeof(data));
+    const int uBattRef = analogRead(PIN_UBATTREF);
+    const int uBattLevel = analogRead(PIN_UBATTLEVEL);
+    const int uBattRaw = (uBattRef > 0)
+      ? (int)((UZENER + UBATTREF * (float)uBattLevel / (float)uBattRef) * 1000.0f)
+      : 0;
+    static int uBattFiltered = 0;
+    if (uBattFiltered == 0) uBattFiltered = uBattRaw;
+    else                    uBattFiltered += (uBattRaw - uBattFiltered) / 8;
+    updateMeter("Poti Main",         data.potiMain,        1023, 0, 4);
+    updateMeter("Poti Center Left",  data.potiCenterLeft,  1023, 1, 4);
+    updateMeter("Poti Center Right", data.potiCenterRight, 1023, 2, 4);
+    updateMeter("Battery [mV]",      uBattFiltered,       10000, 3, 25);
   }
-
   else if (generalInfo.screen == SCREEN_POTI_LEFT_RIGHT)
   {
-    while (Serial.available() < sizeof(ScreenPotiLeftRight));
-
-    ScreenPotiLeftRight status_screen;
-    Serial.readBytes((byte*) &status_screen, sizeof(ScreenPotiLeftRight));
-
-    setLevelMeter("Poti Left 1",  status_screen.potiLeft1,      0, 1023, 0);
-    setLevelMeter("Poti Left 2",  status_screen.potiLeft2,      0, 1023, 1);
-    setLevelMeter("Poti Right 1", status_screen.potiRight1,     0, 1023, 2);
-    setLevelMeter("Poti Right 2", status_screen.potiRight2Cont, 0, 1023, 3);
+    ScreenPotiLeftRight data;
+    memcpy(&data, payload, sizeof(data));
+    updateMeter("Poti Left 1",  data.potiLeft1,      1023, 0, 4);
+    updateMeter("Poti Left 2",  data.potiLeft2,      1023, 1, 4);
+    updateMeter("Poti Right 1", data.potiRight1,     1023, 2, 4);
+    updateMeter("Poti Right 2", data.potiRight2Cont, 1023, 3, 4);
   }
-
   else if (generalInfo.screen == SCREEN_SWITCHES)
   {
-    while (Serial.available() < 4);
-
     uint8_t rxMsg[4];
-    Serial.readBytes((byte*) rxMsg, 4);
+    memcpy(rxMsg, payload, sizeof(rxMsg));
+    uint32_t packedSwitches;
+    memcpy(&packedSwitches, rxMsg, sizeof(packedSwitches));
 
-    int8_t  switchLeft[2]       = {0};
-    int8_t  switchRight[2]      = {0};
-    int8_t  switchRightRotary   = 0;
-    int8_t  buttonRight         = 0;
-    int8_t  switchCenter[6]     = {0};
-    int8_t  toggleButton[2]     = {0};
+    if (packedSwitches != displayCache.switches)
+    {
+      displayCache.switches = packedSwitches;
+
+      int8_t  switchLeft[2]       = {0};
+      int8_t  switchRight[2]      = {0};
+      int8_t  switchRightRotary   = 0;
+      int8_t  buttonRight         = 0;
+      int8_t  switchCenter[6]     = {0};
+      int8_t  toggleButton[2]     = {0};
     
     bitWrite(switchLeft[0],     0, bitRead(rxMsg[0], 0));
     bitWrite(switchLeft[1],     0, bitRead(rxMsg[0], 1));
@@ -203,9 +221,9 @@ void loop(void)
     toggleButton[0] -= 3;
     toggleButton[1] -= 3;
 
-    char text[50];
-    sprintf(text,"Schalter und Taster");
-    setText(text,0);
+      char text[50];
+      sprintf(text,"Schalter und Taster");
+      setText(text,0);
     sprintf(text,"----------------------------------");
     setText(text,1);
     
@@ -230,21 +248,99 @@ void loop(void)
     sprintf(text,"Rising: +/-3   Cons: +/-1  Falling: +/-1");
     setText(text,8,ALIGN_CENTER);
     
-    sprintf(text,"Für Screenwechsel zusätzlich Taster!");
-    setText(text,9,ALIGN_CENTER);
+      sprintf(text,"Für Screenwechsel zusätzlich Taster!");
+      setText(text,9,ALIGN_CENTER);
+    }
   }
 
-  screen_old = generalInfo.screen;
+  char text[40];
+  sprintf(text,"C%5u/%5u", generalInfo.taskCtr, taskCtrDisplay);
+  setText(text,9,ALIGN_RIGHT);
 
   Serial.write(SERIAL_START);
   Serial.write(SERIAL_END);
 
-  counter++;
-  if (counter >= 100)
+  if (generalInfo.tone == 1) tone(BUZZER, 500);
+  else                       noTone(BUZZER);
+
+}
+
+void loop(void)
+{
+  static uint8_t rxBuffer[32];
+  static uint8_t rxPos = 0;
+  static uint8_t expectedSize = 0;
+  static unsigned long lastByteTime = 0;
+
+  // Ein abgebrochenes Paket verwerfen, bevor neue Bytes verarbeitet werden.
+  if (rxPos > 0 && (millis() - lastByteTime) > 100)
   {
-    tone(BUZZER, 500);
-    delay(150);
-    noTone(BUZZER);
-    counter = 0;
+    rxPos = 0;
+    expectedSize = 0;
   }
+
+  while (Serial.available() > 0)
+  {
+    const uint8_t value = Serial.read();
+    lastByteTime = millis();
+
+    if (rxPos == 0)
+    {
+      if (value == SERIAL_START)
+      {
+        rxBuffer[rxPos++] = value;
+      }
+      continue;
+    }
+
+    if (rxPos == 1)
+    {
+      if (value == SERIAL_START)
+      {
+        rxBuffer[rxPos++] = value;
+      }
+      else
+      {
+        rxPos = 0;
+      }
+      continue;
+    }
+
+    if (rxPos >= sizeof(rxBuffer))
+    {
+      rxPos = 0;
+      expectedSize = 0;
+      continue;
+    }
+
+    rxBuffer[rxPos++] = value;
+
+    if (rxPos == 2 + sizeof(GeneralInfo))
+    {
+      GeneralInfo header;
+      memcpy(&header, &rxBuffer[2], sizeof(header));
+      const size_t payloadSize = payloadSizeForScreen(header.screen);
+      if (payloadSize == 0)
+      {
+        rxPos = 0;
+        expectedSize = 0;
+        continue;
+      }
+      expectedSize = 2 + sizeof(GeneralInfo) + payloadSize + 2;
+    }
+
+    if (expectedSize > 0 && rxPos == expectedSize)
+    {
+      if (rxBuffer[expectedSize - 2] == SERIAL_END &&
+          rxBuffer[expectedSize - 1] == SERIAL_END)
+      {
+        GeneralInfo header;
+        memcpy(&header, &rxBuffer[2], sizeof(header));
+        processPacket(header, &rxBuffer[2 + sizeof(GeneralInfo)]);
+      }
+      rxPos = 0;
+      expectedSize = 0;
+    }
+  }
+
 }

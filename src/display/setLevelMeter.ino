@@ -4,6 +4,44 @@
 #define FRAME_OFFSET        4
 #define BORDER_OFFSET       5
 
+// Aktualisiert nur die Differenz zwischen altem und neuem Balkenstand.
+// Dadurch gibt es keine kurzzeitig komplett gelöschte Fläche mehr.
+void setLevelMeterPartial(int oldValue, int newValue, const int minValue, const int maxValue, const int line)
+{
+  const int x0 = BORDER_OFFSET;
+  const int barHeight = 30;
+  const int barWidth = TFT_WIDTH - 2*BORDER_OFFSET;
+  const int yText = (line * (TFT_HEIGHT-BORDER_OFFSET)) / 4;
+  const int yBar = yText + 20;
+
+  char out[7];
+  font.setColor(WHITE, BLACK);
+  font.setCharMinWd(13);
+  font.setFont(&rre_term_10x16);
+  sprintf(out, "%6d", newValue);
+  font.printStr(ALIGN_RIGHT, yText+5, out);
+
+  oldValue = constrain(oldValue, minValue, maxValue);
+  newValue = constrain(newValue, minValue, maxValue);
+  const int oldLevel = map(oldValue, minValue, maxValue, 0, barWidth);
+  const int newLevel = map(newValue, minValue, maxValue, 0, barWidth);
+
+  if (newLevel > oldLevel)
+  {
+    tft.fillRect(x0 + oldLevel, yBar+FRAME_OFFSET,
+                 newLevel - oldLevel, barHeight-2*FRAME_OFFSET, BAR_COLOR);
+  }
+  else if (newLevel < oldLevel)
+  {
+    tft.fillRect(x0 + newLevel, yBar+FRAME_OFFSET,
+                 oldLevel - newLevel, barHeight-2*FRAME_OFFSET, BACKGROUND_COLOR);
+  }
+
+  // Eine geänderte Fläche kann Teilstriche überschreiben.
+  for (int i = 0; i < 5; i++)
+    tft.drawFastVLine(x0 + i*barWidth/5, yBar, barHeight, FRAME_COLOR);
+}
+
 void setLevelMeter(const char *text, int value, const int minValue, const int maxValue, const int line)
 {
   const int fontWidth      = 60;

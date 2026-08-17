@@ -9,11 +9,9 @@
 
 struct GeneralInfo
 {
-  int16_t dummy1 = 0;
-  int16_t dummy2 = 0;
-  int16_t dummy3 = 0;
-  
-  int8_t  screen = SCREEN_JOYSTICK_VALUES;
+  int8_t    screen  = SCREEN_JOYSTICK_VALUES;
+  uint16_t  taskCtr = 0;
+  uint8_t   tone    = 0;
 };
 
 

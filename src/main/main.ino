@@ -1,15 +1,15 @@
 #include <util/atomic.h>
-#include "C:/Dokumente/Elektronik & Modellbau/Fernsteuerung_FM6014/git-repository/inc/definitions.h"
+#include "C:/Development/Elektronik/Fernsteuerung_FM6014/git-repository/inc/definitions.h"
 
 
-#define DEBUG_MODE                true
+#define DEBUG_MODE                true  // Seriellen Monitor verwenden, um alle Input-Größen im Monitor anzuzeigen
 #define POTI_CENTER               512
 
 // Serielle Schnittstelle
 #define BAUD_RATE                 57600
 #define SERIAL_START              255
 #define SERIAL_END                128
-#define UPDATE_PERIOD             300
+#define UPDATE_PERIOD             250  // Fallback; normale Updates werden vom Display angefordert
 
 // Analoge Ports
 #define JOYSTICK1                 A0
@@ -107,20 +107,21 @@ struct Joystick
 
 
 Joystick thrust, rudder, elevator, aileron;
-int     potiMain            = 0;
-int     potiCenterLeft      = 0;
-int     potiCenterRight     = 0;
-int     potiLeft1           = 0;
-int     potiLeft2           = 0;
-int     potiRight1          = 0;
-int     potiRight2Cont      = 0;
-int8_t  switchLeft[2]       = {0};
-int8_t  switchRight[2]      = {0};
-int8_t  switchRightRotary   = 0;
-int8_t  buttonRight         = 0;
-int8_t  switchCenter[6]     = {0};
-int8_t  toggleButton[2]     = {0};
-int8_t  screen              = 0;
+int       potiMain            = 0;
+int       potiCenterLeft      = 0;
+int       potiCenterRight     = 0;
+int       potiLeft1           = 0;
+int       potiLeft2           = 0;
+int       potiRight1          = 0;
+int       potiRight2Cont      = 0;
+int8_t    switchLeft[2]       = {0};
+int8_t    switchRight[2]      = {0};
+int8_t    switchRightRotary   = 0;
+int8_t    buttonRight         = 0;
+int8_t    switchCenter[6]     = {0};
+int8_t    toggleButton[2]     = {0};
+int8_t    screen              = 0;
+uint16_t  taskCtr             = 0;
 
 
 
@@ -136,6 +137,8 @@ void setup()
 
 void loop()
 {
+  taskCtr++;
+  
   thrust.value    = analogRead(JOYSTICK1);
   thrust.trimm    = analogRead(TRIMMER1);
   rudder.value    = analogRead(JOYSTICK2);
@@ -145,6 +148,9 @@ void loop()
   aileron.value   = analogRead(JOYSTICK4);
   aileron.trimm   = analogRead(TRIMMER4);
   
+  // A8 liegt beim ATmega2560 hinter dem MUX5-Gruppenwechsel (A7 -> A8).
+  // Die erste Konvertierung dient dem Einschwingen des Sample-and-Hold-Kondensators.
+  analogRead(POTI_MAIN);
   potiMain        = analogRead(POTI_MAIN);
   potiCenterLeft  = analogRead(POTI_CENTER_LEFT);
   potiCenterRight = analogRead(POTI_CENTER_RIGHT);
@@ -275,14 +281,14 @@ void initCPPM()
 // Serial
 void updateDisplay()
 { 
-  // Nächste Aktualisierungszeitpunkt
-  static unsigned long updateTime = 0;
+  static unsigned long lastUpdateTime = 0;
 
   // Aktualisierung des Displays nur alle UPDATE_PERIOD, ansonsten
   // funktioniert die Kommunikation über die Schnittstelle nicht
 
-  const bool updateTimeExceeded = millis() > updateTime;
-  const bool updateRequested    = false; // (Serial1.available() > 1) && (Serial.read() == SERIAL_START) && (Serial.read() == SERIAL_END);
+  const unsigned long now = millis();
+  const bool updateTimeExceeded = (now - lastUpdateTime) >= UPDATE_PERIOD;
+  const bool updateRequested    = (Serial1.available() > 1) && (Serial1.read() == SERIAL_START) && (Serial1.read() == SERIAL_END);
 
   if (!updateRequested && !updateTimeExceeded) return;
 
@@ -293,7 +299,9 @@ void updateDisplay()
   // Screen-Information -> Daraus bestimmt sich automatisch die Länge des Datenstroms
   static GeneralInfo generalInfo;
 
-  generalInfo.screen = screen;
+  generalInfo.screen  = screen;
+  generalInfo.taskCtr = taskCtr;
+  generalInfo.tone    = buttonRight;
   Serial1.write((const byte*) &generalInfo, sizeof(GeneralInfo));
 
   if (generalInfo.screen == SCREEN_JOYSTICK_VALUES)
@@ -386,8 +394,7 @@ void updateDisplay()
   Serial1.write(SERIAL_END);
 
 
-  // Nächste Aktualisierung des Displays bestimmen
-  updateTime = millis() + UPDATE_PERIOD;
+  lastUpdateTime = now;
 }
 // -----------------------------------------------------------------------------------------------------
 
