@@ -1,0 +1,49 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Arduino Mega kompilieren und flashen",
+            "type": "process",
+            "command": "C:\\Program Files\\_Development\\ArduinoIDE\\Arduino IDE\\resources\\app\\lib\\backend\\resources\\arduino-cli.exe",
+            "args": [
+                "compile",
+                "--fqbn",
+                "arduino:avr:mega",
+                "--port",
+                "COM6",
+                "--upload",
+                "${workspaceFolder}\\src\\master"
+            ],
+            "problemMatcher": "$gcc",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            }
+        },
+        {
+            "label": "Arduino Serial Monitor",
+            "type": "process",
+            "command": "C:\\Program Files\\_Development\\ArduinoIDE\\Arduino IDE\\resources\\app\\lib\\backend\\resources\\arduino-cli.exe",
+            "args": [
+                "monitor",
+                "--port",
+                "COM6",
+                "--config",
+                "baudrate=57600",
+                "--quiet"
+            ],
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "focus": true,
+                "panel": "dedicated",
+                "clear": true
+            }
+        }
+    ]
+}
