@@ -1,0 +1,16 @@
+BasedOnStyle: LLVM
+ColumnLimit: 180
+
+MaxEmptyLinesToKeep: 2
+BreakBeforeBraces: Allman
+SeparateDefinitionBlocks: Always
+AllowShortIfStatementsOnASingleLine: AllIfsAndElse
+
+AlignConsecutiveAssignments:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false
+  AlignCompound: true
+  PadOperators: true
+
+  

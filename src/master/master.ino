@@ -10,10 +10,10 @@
 #define UPDATE_PERIOD             250  // Fallback; normale Updates werden vom Display angefordert
 
 
-Joystick thrust   (JoystickType::THRUST,   50,  1000, false);
-Joystick rudder   (JoystickType::RUDDER,   25,  1000, false);
-Joystick elevator (JoystickType::ELEVATOR, 25,  1000, false);
-Joystick aileron  (JoystickType::AILERON,  25,  1000, false);
+Joystick thrust   (JoystickType::THRUST);
+Joystick rudder   (JoystickType::RUDDER);
+Joystick elevator (JoystickType::ELEVATOR);
+Joystick aileron  (JoystickType::AILERON);
 
 uint16_t  taskCtr = 0;
 
