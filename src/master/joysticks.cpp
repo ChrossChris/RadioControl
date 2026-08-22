@@ -72,7 +72,7 @@ void Joystick::setup()
 int16_t Joystick::update()
 {
   valueRaw = analogRead(pin_joystick);
-  trimm    = analogRead(pin_trimm) - 512; // Trimmwert auf die aktuelle Nulllage beziehen -> 0 = keine Trimmung, -512..+512 = maximale Trimmung
+  trimm    = analogRead(pin_trimm) - 512; // Trimmwert auf die aktuelle Nulllage beziehen -> 0 = keine Trimmung, -512..+511 = maximale Trimmung
 
   // Clampen des Rohwertes auf die Poti-Grenzen, um die Wertebereiche der Joysticks zu begrenzen
   valueRaw = constrain(valueRaw, minPoti, maxPoti);
@@ -136,9 +136,6 @@ void Joystick::applyDualRate()
   }
 }
 // -------------------------------------------------------------------------------------------------------------------
-
-
-
 
 
 // -------------------------------------------------------------------------------------------------------------------
@@ -206,9 +203,9 @@ void Joystick::setXYCurve(const int16_t xCurve[], const int16_t yCurve[], const 
   useXYCurve   = true;
 
   xyCurvePoints = min(numPoints, sizeXYcurve);
-  if (xyCurvePoints < 2)
+  if ((xyCurvePoints < 2) || (xCurve == nullptr) || (yCurve == nullptr))
   {
-    // Falls die X-Werte nicht korrekt sind, wird die Exponentialfunktion als Fallback verwendet
+    // Falls die X-Werte nicht korrekt sind, wird die xy-Curve deaktiviert
     xyCurvePoints = 0;
     useXYCurve    = false;
     return;
@@ -222,7 +219,7 @@ void Joystick::setXYCurve(const int16_t xCurve[], const int16_t yCurve[], const 
     // Die X-Werte müssen streng aufsteigend sein.
     if ((i > 0) && (this->xCurve[i] <= this->xCurve[i - 1]))
     {
-      // Falls die X-Werte nicht korrekt sind, wird die Exponentialfunktion als Fallback verwendet
+      // Falls die X-Werte nicht korrekt sind, wird die xy-Curve deaktiviert
       xyCurvePoints = 0;
       useXYCurve    = false; 
       return;

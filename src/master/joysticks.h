@@ -54,28 +54,96 @@ class Joystick
 {
 
 public:
+  /// Erzeugt einen Joystickkanal und ordnet ihm anhand von 'type' die in
+  /// 'JoystickConfig' hinterlegten Pins, Kalibriergrenzen, Totzone und Richtung zu.
+  /// @param type Kanaltyp: THRUST, RUDDER, ELEVATOR oder AILERON.
   explicit Joystick(const JoystickType type);
-  
-  void     setup();
 
-  int16_t  update();
+  /// Initialisiert die Eingänge und bestimmt bei zentrierenden Joysticks die
+  /// aktuelle Mittelstellung aus zehn ADC-Messungen. Bei THRUST wird die
+  /// konfigurierte untere Potigrenze als Nullstellung verwendet.
+  /// Muss einmal in 'setup()' aufgerufen werden, bevor 'update()' verwendet wird.
+  void setup();
 
-  int16_t  getValue()           const { return value;          };
-  int16_t  getValueRaw()        const { return valueRaw;       };
-  int16_t  getValueNormalized() const { return valueNormalized;};
-  int16_t  getTrimmValueRaw()   const { return trimm;          };
-  int16_t  getControlLimit()    const { return controlLimit;   };
+  /// Liest Joystick und Trimmer ein, begrenzt und normalisiert den Joystickwert
+  /// und wendet implizt Richtung, Expo- oder XY-Kurve sowie Dual Rate an.
+  /// Diese Funktion muss aufgerufen werden, wenn die aktuelle Joystick-Position 
+  /// ausgewertet werden soll.
+  /// @return Bearbeiteter Joystickwert im Bereich -controlLimit..+controlLimit
+  ///         (aktuell -10000..+10000). THRUST liefert ohne Richtungsumkehr 0..+controlLimit.
+  int16_t update();
 
-  void     setDeadBand(const int16_t centerDeadBandADC);
-  void     setDirection(const bool inverseDirection);
+  /// Liefert den zuletzt von 'update()' berechneten Endwert nach allen Kennlinien.
+  /// Wertebereich: -controlLimit..+controlLimit (aktuell -10000..+10000).
+  /// Der Wert entspricht dem letzten Wert nach Aufruf von 'update()', somit muss der Wert
+  /// nicht außerhalb von Joystick gepuffert werden.
+  /// @return Letzter bearbeiteter Joystickwert im Bereich -10000..+10000.
+  int16_t getValue() const { return value; };
 
-  void     setExpoCurve(const int16_t expoRatePermille);
-  void     setDualRate(const int16_t lowerRatePermille, const int16_t upperRatePermille);
-  void     setXYCurve(const int16_t xCurvePercent[], const int16_t yCurvePercent[], const uint8_t numPoints);
+  /// Liefert den zuletzt eingelesenen und auf die kalibrierten Potigrenzen
+  /// begrenzten ADC-Wert. Der genaue Bereich hängt vom Joysticktyp ab.
+  /// @return Letzter begrenzter ADC-Wert zwischen der konfigurierten minimalen
+  ///         und maximalen Potigrenze des jeweiligen Kanals.
+  int16_t getValueRaw() const { return valueRaw; };
 
-  void     resetExpoCurve();
-  void     resetXYCurve();
-  void     resetDualRate();
+  /// Liefert den auf -controlLimit..+controlLimit normalisierten Joystickwert
+  /// vor Richtungsumkehr, Expo-/XY-Kurve und Dual Rate.
+  /// @return Letzter normalisierter Wert im Bereich -10000..+10000.
+  ///         THRUST liegt ohne Richtungsumkehr im Bereich 0..+10000.
+  int16_t getValueNormalized() const { return valueNormalized;};
+
+  /// Liefert den rohen Trimmerwert bezogen auf die ADC-Mitte.
+  /// Wertebereich bei einem 10-Bit-ADC: -512..+511.
+  /// @return Letzter Trimmerwert im Bereich -512..+511.
+  int16_t getTrimmValueRaw() const { return trimm; };
+
+  /// Liefert die betragsmäßige Grenze des normalisierten Joystickwertes.
+  /// @return Konstante Obergrenze des normalisierten Bereichs; aktuell 10000.
+  int16_t getControlLimit() const { return controlLimit; };
+
+  /// Setzt die Totzone beiderseits der Mittelstellung in ADC-Schritten.
+  /// @param centerDeadBandADC Gewünschte Totzone; intern auf 0..1000 begrenzt.
+  ///        Bei THRUST wirkt sie als untere Totzone ab der Minimalstellung.
+  void setDeadBand(const int16_t centerDeadBandADC);
+
+  /// Schaltet die Vorzeichenumkehr des normalisierten Joystickwertes ein oder aus.
+  /// Die Umkehrung erfolgt vor Expo-/XY-Kurve und Dual Rate.
+  /// @param inverseDirection 'true' kehrt die Richtung um, 'false' verwendet
+  ///        die durch die Potikalibrierung vorgegebene Richtung.
+  void setDirection(const bool inverseDirection);
+
+  /// Aktiviert die Expo-Kennlinie und deaktiviert gleichzeitig die XY-Kurve.
+  /// @param expoRatePermille ADC-Einstellwert 0..1023. Nach einer Randtotzone
+  ///        wird er intern auf 0..1000 begrenzt und auf den Exponenten 1.0..4.0
+  ///        abgebildet. 0-12 entspricht 0 %, 1012..1023 entspricht 100 % Ausschlag.
+  void setExpoCurve(const int16_t expoRatePermille);
+
+  /// Aktiviert eine getrennte Begrenzung des negativen und positiven Bereichs.
+  /// @param lowerRatePermille Einstellwert für negative Ausgangswerte, erwartet
+  ///        0..1023; intern nach Randtotzone auf 0..1000 begrenzt.
+  /// @param upperRatePermille Einstellwert für positive Ausgangswerte, erwartet
+  ///        0..1023; intern nach Randtotzone auf 0..1000 begrenzt.
+  /// 0-12 entspricht 0 %, 1012..1023 entspricht 100 % Ausschlag.
+  void setDualRate(const int16_t lowerRatePermille, const int16_t upperRatePermille);
+
+  /// Aktiviert eine stückweise linear interpolierte XY-Kennlinie und deaktiviert Expo.
+  /// @param xCurvePercent X-Stützpunkte in Prozent; jeder Wert wird auf
+  ///        -100..+100 begrenzt. Nach der Begrenzung müssen sie streng aufsteigen.
+  /// @param yCurvePercent Ausgangswerte der Stützpunkte in Prozent; jeder Wert
+  ///        wird auf -100..+100 begrenzt.
+  /// @param numPoints Anzahl gültiger Einträge in beiden Arrays. Erlaubt sind
+  ///        2..sizeXYcurve (aktuell 31); größere Werte werden auf 31 begrenzt.
+  ///        Bei weniger als zwei oder ungültigen X-Punkten wird die Kurve deaktiviert.
+  void setXYCurve(const int16_t xCurvePercent[], const int16_t yCurvePercent[], const uint8_t numPoints);
+
+  /// Deaktiviert die Expo-Kennlinie. Der zuletzt gesetzte Exponent bleibt gespeichert.
+  void resetExpoCurve();
+
+  /// Deaktiviert die XY-Kennlinie. Stützpunkte und Punktzahl bleiben gespeichert.
+  void resetXYCurve();
+
+  /// Deaktiviert Dual Rate. Die zuletzt gesetzten Grenzwerte bleiben gespeichert.
+  void resetDualRate();
   
 private:
   static constexpr int16_t controlLimit = 10000; // Obergrenze für den normalisierten Joystickwert
@@ -84,8 +152,25 @@ private:
 
   JoystickType joystickType;
 
+  /// Wendet die aktivierte Expo-Kennlinie auf 'value' an.
+  /// Der Betrag wird auf 0.0..1.0 normiert, mit 'expoPower' (1.0..4.0)
+  /// potenziert und anschließend wieder auf 0..controlLimit skaliert.
+  /// Bei deaktiviertem Expo oder einem Exponenten <= 1.0 bleibt 'value' unverändert.
+  /// Kein Rückgabewert: Das Ergebnis wird direkt in 'value' gespeichert.
   void applyExpoCurve();
+
+  /// Skaliert 'value' bei aktiviertem Dual Rate getrennt nach Vorzeichen.
+  /// Negative Werte verwenden 'lowerRateLimit', positive Werte 'upperRateLimit'.
+  /// Die Faktoren 0..inputRange entsprechen einer Skalierung von 0..100 %.
+  /// Eine int32_t-Zwischenrechnung schützt die Multiplikation vor Überlauf.
+  /// Kein Rückgabewert: Das Ergebnis wird direkt in 'value' gespeichert.
   void applyDualRate();
+
+  /// Wendet bei aktivierter und gültiger XY-Kurve eine stückweise lineare
+  /// Interpolation auf 'value' an. Werte außerhalb des definierten X-Bereichs
+  /// werden auf den ersten beziehungsweise letzten Y-Stützpunkt begrenzt.
+  /// Voraussetzung sind mindestens zwei streng aufsteigende X-Stützpunkte.
+  /// Kein Rückgabewert: Das Ergebnis wird direkt in 'value' gespeichert.
   void applyXYCurve();
 
   // Meine Empfehlung:
