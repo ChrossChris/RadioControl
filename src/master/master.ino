@@ -15,11 +15,35 @@ Joystick rudder   (JoystickType::RUDDER);
 Joystick elevator (JoystickType::ELEVATOR);
 Joystick aileron  (JoystickType::AILERON);
 
-uint16_t  taskCtr = 0;
+#define DUAL_RATE_LEFT            A11
+#define DUAL_RATE_RIGHT           A12
+#define EXPO                      A13
+#define SWITCH_XY_CURVE           20
+#define SWITCH_EXPO               21
+#define SWITCH_DUALRATE_LEFT      27
+#define SWITCH_DUALRATE_RIGHT     29
 
+
+int16_t expo                = 0;
+int16_t dualRateLeft        = 0;
+int16_t dualRateRight       = 0;
+int8_t  switchExpo          = 0;
+int8_t  switchXYCurve       = 0;
+int8_t  switchDualRateLeft  = 0;
+int8_t  switchDualRateRight = 0;
+
+uint16_t  taskCtr = 0;
 
 void setup()
 {
+  pinMode(SWITCH_EXPO, INPUT);
+  pinMode(SWITCH_XY_CURVE, INPUT);
+  pinMode(SWITCH_DUALRATE_LEFT, INPUT);
+  pinMode(SWITCH_DUALRATE_RIGHT, INPUT);
+
+  pinMode(EXPO, INPUT);
+  pinMode(DUAL_RATE_LEFT, INPUT);
+  pinMode(DUAL_RATE_RIGHT, INPUT);
   
   thrust.setup();
   rudder.setup();
@@ -31,12 +55,80 @@ void setup()
 
 void loop()
 {
+
+  switchExpo    = digitalRead(SWITCH_EXPO);
+  switchXYCurve = digitalRead(SWITCH_XY_CURVE);
+  
   taskCtr++;
   thrust.update();
   rudder.update();  
   elevator.update();
   aileron.update();
 
+  expo = analogRead(EXPO);
+  if (switchExpo)
+  { 
+    thrust.setExpoCurve(expo);
+    rudder.setExpoCurve(expo);
+    elevator.setExpoCurve(expo);
+    aileron.setExpoCurve(expo);
+  }
+  else if (switchXYCurve)
+  {
+    const int16_t x[] = {-100, 0,  10,  20, 40, 90, 100};
+    const int16_t y[] = {   0, 0,   0,  10, 30, 70, 100};
+    const uint8_t n   = 7;
+    thrust.setXYCurve(x, y, n);
+    rudder.setXYCurve(x, y, n);
+    elevator.setXYCurve(x, y, n);
+    aileron.setXYCurve(x, y, n);
+  }
+  else
+  {
+    thrust.resetExpoCurve();
+    rudder.resetExpoCurve();
+    elevator.resetExpoCurve();
+    aileron.resetExpoCurve();
+
+    thrust.resetXYCurve();
+    rudder.resetXYCurve();
+    elevator.resetXYCurve();
+    aileron.resetXYCurve();
+  }
+
+  dualRateLeft        = analogRead(DUAL_RATE_LEFT);
+  dualRateRight       = analogRead(DUAL_RATE_RIGHT);
+  switchDualRateLeft  = digitalRead(SWITCH_DUALRATE_LEFT);
+  switchDualRateRight = digitalRead(SWITCH_DUALRATE_RIGHT);
+  if (switchDualRateLeft && switchDualRateRight)
+  {
+    thrust.setDualRate(dualRateLeft, dualRateRight);
+    rudder.setDualRate(dualRateLeft, dualRateRight);
+    elevator.setDualRate(dualRateLeft, dualRateRight);
+    aileron.setDualRate(dualRateLeft, dualRateRight);
+  }
+  else if (switchDualRateLeft)
+  {
+    thrust.setDualRate(dualRateLeft, 1023);
+    rudder.setDualRate(dualRateLeft, 1023);
+    elevator.setDualRate(dualRateLeft, 1023);
+    aileron.setDualRate(dualRateLeft, 1023);
+  }
+  else if (switchDualRateRight)
+  {
+    thrust.setDualRate(1023, dualRateRight);
+    rudder.setDualRate(1023, dualRateRight);
+    elevator.setDualRate(1023, dualRateRight);
+    aileron.setDualRate(1023, dualRateRight);
+  }
+  else
+  {
+    thrust.resetDualRate();
+    rudder.resetDualRate();
+    elevator.resetDualRate();
+    aileron.resetDualRate();
+  }
+  
   updateDebugMonitor();
 
   delay(100);
