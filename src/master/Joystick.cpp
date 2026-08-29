@@ -1,7 +1,9 @@
 // Joysticks.cpp
-#include "Joysticks.h"
+#include "Joystick.h"
 
-Joystick::Joystick(const JoystickType type) : joystickType(type)
+// -------------------------------------------------------------------------------------------------------------------
+Joystick::Joystick(const JoystickType type)
+  : joystickType(type)
 {
   switch (joystickType)
   {
@@ -46,8 +48,10 @@ Joystick::Joystick(const JoystickType type) : joystickType(type)
     break;
   }
 }
+// -------------------------------------------------------------------------------------------------------------------
 
 
+// -------------------------------------------------------------------------------------------------------------------
 void Joystick::setup()
 {
   pinMode(pin_joystick, INPUT);
@@ -67,9 +71,11 @@ void Joystick::setup()
     centerPos /= amount;
   }
 }
+// -------------------------------------------------------------------------------------------------------------------
 
 
-int16_t Joystick::update()
+// -------------------------------------------------------------------------------------------------------------------
+void Joystick::update()
 {
   valueRaw = analogRead(pin_joystick);
   trimm    = analogRead(pin_trimm) - 512; // Trimmwert auf die aktuelle Nulllage beziehen -> 0 = keine Trimmung, -512..+511 = maximale Trimmung
@@ -77,13 +83,13 @@ int16_t Joystick::update()
   // Clampen des Rohwertes auf die Poti-Grenzen, um die Wertebereiche der Joysticks zu begrenzen
   valueRaw = constrain(valueRaw, minPoti, maxPoti);
 
-  // Aufteilen des Wertebereichs in zwei Hälften, um die Werte zentriert um centerPos auf -controlLimit..+controlLimit zu mappen
+  // Aufteilen des Wertebereichs in zwei Hälften, um die Werte zentriert um centerPos auf -CONTROL_LIMIT..+CONTROL_LIMIT zu mappen
   if      (centerPos + deadBand >= maxPoti)  valueNormalized = 0;
-  else if (valueRaw > centerPos + deadBand)  valueNormalized = map(valueRaw, centerPos + deadBand, maxPoti, 0, controlLimit);
+  else if (valueRaw > centerPos + deadBand)  valueNormalized = map(valueRaw, centerPos + deadBand, maxPoti, 0, CONTROL_LIMIT);
   else if (valueRaw > centerPos - deadBand)  valueNormalized = 0;
   else if (thrust_config)                    valueNormalized = 0;
   else if (centerPos - deadBand <= minPoti)  valueNormalized = 0;
-  else                                       valueNormalized = map(valueRaw, minPoti, centerPos - deadBand, -controlLimit, 0);
+  else                                       valueNormalized = map(valueRaw, minPoti, centerPos - deadBand, -CONTROL_LIMIT, 0);
 
   if (inverseDirection) value = -valueNormalized; // Richtung umkehren, falls der Servo in die entgegengesetzte Richtung angesteuert werden soll
   else                  value =  valueNormalized;
@@ -91,21 +97,16 @@ int16_t Joystick::update()
   applyExpoCurve(); // Nichtlineare Kennlinie anwenden, falls eingestellt
   applyXYCurve();   // Alternative Kennlinie über x-y-Kurve anwenden, falls eingestellt
   applyDualRate();  // Dual-Rate anwenden, falls eingestellt
-
-  return value;
 }
+// -------------------------------------------------------------------------------------------------------------------
 
-
-void Joystick::setDeadBand(const int16_t centerDeadBand)
-{
-  deadBand = constrain(centerDeadBand, 0, inputRange);
-}
-
-
-void Joystick::setDirection(const bool inverseServoDirection)
-{ 
-  inverseDirection = inverseServoDirection; 
-}
+// -------------------------------------------------------------------------------------------------------------------
+void Joystick::setDeadBand(const int16_t centerDeadBand)       { deadBand = constrain(centerDeadBand, 0, inputRange); }
+void Joystick::setDirection(const bool inverseServoDirection)  { inverseDirection = inverseServoDirection; }
+void Joystick::resetExpoCurve() { useExpoCurve = false; }
+void Joystick::resetDualRate()  { useDualRate  = false; }
+void Joystick::resetXYCurve()   { useXYCurve   = false; }
+// -------------------------------------------------------------------------------------------------------------------
 
 
 // -------------------------------------------------------------------------------------------------------------------
@@ -119,12 +120,6 @@ void Joystick::setDualRate(const int16_t lowerRate, const int16_t upperRate)
 }
 // -------------------------------------------------------------------------------------------------------------------
 
-// -------------------------------------------------------------------------------------------------------------------
-void Joystick::resetDualRate()
-{
-  useDualRate = false;
-}
-// -------------------------------------------------------------------------------------------------------------------
 
 // -------------------------------------------------------------------------------------------------------------------
 void Joystick::applyDualRate()
@@ -160,15 +155,6 @@ void Joystick::setExpoCurve(const int16_t expoRate)
 }
 // -------------------------------------------------------------------------------------------------------------------
 
-
-// -------------------------------------------------------------------------------------------------------------------
-void Joystick::resetExpoCurve()
-{
-  useExpoCurve = false;
-}
-// -------------------------------------------------------------------------------------------------------------------
-
-
 // -------------------------------------------------------------------------------------------------------------------
 void Joystick::applyExpoCurve()
 {
@@ -178,7 +164,7 @@ void Joystick::applyExpoCurve()
     // ??? Brauchen wir eine untere Grenze für expoPower, bei der die Berechnung abgekürzt wird? 
     // ??? -> expoPower = 1.0F ändert nichts am Wert und bis zu welchem Wet von expoPower ergibt sich eine Relevanz.
     // ??? Dann kann die Berechnung ggf. hier abgekürzt werden, um Rechenzeit zu sparen.  
-    float x = static_cast<float>(abs(value)) / static_cast<float>(controlLimit); // Normierung auf den Bereich 0..1
+    float x = static_cast<float>(abs(value)) / static_cast<float>(CONTROL_LIMIT); // Normierung auf den Bereich 0..1
 
     // Berechnung der Potenzfunktion entsprechend:
     //   f: x |-> x^p  x = 0..1
@@ -189,8 +175,8 @@ void Joystick::applyExpoCurve()
     // daher nur Unterscheidung nötig für Intervallgrenzen.)
     x = pow(x, expoPower);
 
-    if (value < 0) value = -(int16_t)(x * controlLimit); // Entnormierung und ggf. Vorzeichen korrigieren
-    else           value =  (int16_t)(x * controlLimit); // Entnormierung
+    if (value < 0) value = -(int16_t)(x * CONTROL_LIMIT); // Entnormierung und ggf. Vorzeichen korrigieren
+    else           value =  (int16_t)(x * CONTROL_LIMIT); // Entnormierung
   }
 }
 // -------------------------------------------------------------------------------------------------------------------
@@ -230,14 +216,6 @@ void Joystick::setXYCurve(const int16_t xCurve[], const int16_t yCurve[], const 
 
 
 // -------------------------------------------------------------------------------------------------------------------
-void Joystick::resetXYCurve()
-{
-  useXYCurve = false;
-}
-// -------------------------------------------------------------------------------------------------------------------
-
-
-// -------------------------------------------------------------------------------------------------------------------
 void Joystick::applyXYCurve()
 {
   // Funktion nicht ausführen, falls die Exponentialfunktion verwendet wird oder die x-y-Kurve nicht korrekt definiert ist.
@@ -246,11 +224,11 @@ void Joystick::applyXYCurve()
     const int32_t input = value;
 
     // Ersten Kurvenpunkt in den normierten Wertebereich umrechnen.
-    int32_t x0 = (static_cast<int32_t>(xCurve[0]) * controlLimit) / 100;
-    int32_t y0 = (static_cast<int32_t>(yCurve[0]) * controlLimit) / 100;
+    int32_t x0 = (static_cast<int32_t>(xCurve[0]) * CONTROL_LIMIT) / 100;
+    int32_t y0 = (static_cast<int32_t>(yCurve[0]) * CONTROL_LIMIT) / 100;
     // Letzten Kurvenpunkt in den normierten Wertebereich umrechnen.
-    int32_t x1 = (static_cast<int32_t>(xCurve[xyCurvePoints-1]) * controlLimit) / 100;
-    int32_t y1 = (static_cast<int32_t>(yCurve[xyCurvePoints-1]) * controlLimit) / 100;
+    int32_t x1 = (static_cast<int32_t>(xCurve[xyCurvePoints-1]) * CONTROL_LIMIT) / 100;
+    int32_t y1 = (static_cast<int32_t>(yCurve[xyCurvePoints-1]) * CONTROL_LIMIT) / 100;
     // Werte links vom definierten Bereich auf den ersten Punkt begrenzen.
     if      (input <= x0)  value = y0;
     else if (input >= x1)  value = y1;
@@ -259,8 +237,8 @@ void Joystick::applyXYCurve()
       // Passendes Kurvensegment suchen.
       for (uint8_t i = 1; i < xyCurvePoints; i++)
       {
-        x1 = (static_cast<int32_t>(xCurve[i]) * controlLimit) / 100;
-        y1 = (static_cast<int32_t>(yCurve[i]) * controlLimit) / 100;
+        x1 = (static_cast<int32_t>(xCurve[i]) * CONTROL_LIMIT) / 100;
+        y1 = (static_cast<int32_t>(yCurve[i]) * CONTROL_LIMIT) / 100;
     
         if (input <= x1)
         {
@@ -272,7 +250,7 @@ void Joystick::applyXYCurve()
           //               x1 - x0
           //
           const int32_t interpolated = y0 + ((input - x0) * (y1 - y0)) / (x1 - x0);
-          value = constrain(interpolated, -controlLimit, controlLimit);
+          value = constrain(interpolated, -CONTROL_LIMIT, CONTROL_LIMIT);
           break;
         }
 
@@ -285,3 +263,5 @@ void Joystick::applyXYCurve()
   }
 }
 // -------------------------------------------------------------------------------------------------------------------
+
+

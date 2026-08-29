@@ -1,8 +1,9 @@
 // Joysticks.h
-#ifndef JOYSTICKS_H
-#define JOYSTICKS_H
+#ifndef JOYSTICK_H
+#define JOYSTICK_H
 
 #include <Arduino.h>
+#include "RcBaseInput.h"
 
 // Definitionen/Konfiguration für die vorliegende RC-Hardware, muss bei anderer Hardware entsprechend ausgelesen und
 // angepasst werden.
@@ -50,7 +51,7 @@ enum class JoystickType : uint8_t
 };
 
 
-class Joystick
+class Joystick : public RcBaseInput
 {
 
 public:
@@ -63,43 +64,36 @@ public:
   /// aktuelle Mittelstellung aus zehn ADC-Messungen. Bei THRUST wird die
   /// konfigurierte untere Potigrenze als Nullstellung verwendet.
   /// Muss einmal in 'setup()' aufgerufen werden, bevor 'update()' verwendet wird.
-  void setup();
+  void setup() override;
 
   /// Liest Joystick und Trimmer ein, begrenzt und normalisiert den Joystickwert
   /// und wendet implizt Richtung, Expo- oder XY-Kurve sowie Dual Rate an.
   /// Diese Funktion muss aufgerufen werden, wenn die aktuelle Joystick-Position 
   /// ausgewertet werden soll.
-  /// @return Bearbeiteter Joystickwert im Bereich -controlLimit..+controlLimit
-  ///         (aktuell -10000..+10000). THRUST liefert ohne Richtungsumkehr 0..+controlLimit.
-  int16_t update();
-
-  /// Liefert den zuletzt von 'update()' berechneten Endwert nach allen Kennlinien.
-  /// Wertebereich: -controlLimit..+controlLimit (aktuell -10000..+10000).
-  /// Der Wert entspricht dem letzten Wert nach Aufruf von 'update()', somit muss der Wert
-  /// nicht außerhalb von Joystick gepuffert werden.
-  /// @return Letzter bearbeiteter Joystickwert im Bereich -10000..+10000.
-  int16_t getValue() const { return value; };
+  void update() override;
 
   /// Liefert den zuletzt eingelesenen und auf die kalibrierten Potigrenzen
   /// begrenzten ADC-Wert. Der genaue Bereich hängt vom Joysticktyp ab.
   /// @return Letzter begrenzter ADC-Wert zwischen der konfigurierten minimalen
   ///         und maximalen Potigrenze des jeweiligen Kanals.
-  int16_t getValueRaw() const { return valueRaw; };
+  int16_t getValueRaw() const { return valueRaw; }
 
-  /// Liefert den auf -controlLimit..+controlLimit normalisierten Joystickwert
+  /// Liefert den auf -CONTROL_LIMIT..+CONTROL_LIMIT normalisierten Joystickwert
   /// vor Richtungsumkehr, Expo-/XY-Kurve und Dual Rate.
   /// @return Letzter normalisierter Wert im Bereich -10000..+10000.
   ///         THRUST liegt ohne Richtungsumkehr im Bereich 0..+10000.
-  int16_t getValueNormalized() const { return valueNormalized;};
+  int16_t getValueNormalized() const { return valueNormalized; }
 
   /// Liefert den rohen Trimmerwert bezogen auf die ADC-Mitte.
   /// Wertebereich bei einem 10-Bit-ADC: -512..+511.
   /// @return Letzter Trimmerwert im Bereich -512..+511.
-  int16_t getTrimmValueRaw() const { return trimm; };
+  int16_t getTrimmValueRaw() const { return trimm; }
 
-  /// Liefert die betragsmäßige Grenze des normalisierten Joystickwertes.
-  /// @return Konstante Obergrenze des normalisierten Bereichs; aktuell 10000.
-  int16_t getControlLimit() const { return controlLimit; };
+  /// Liefert den Betrag des gemeinsamen normierten Steuerbereichs.
+  /// Ein ausdruecklich unnormierter Eingabemodus darf davon abweichen.
+  /// @return Positive Grenze des normierten Bereichs (definiert in RcBaseInput).
+  int16_t getControlLimit() const { return CONTROL_LIMIT; }
+
 
   /// Setzt die Totzone beiderseits der Mittelstellung in ADC-Schritten.
   /// @param centerDeadBandADC Gewünschte Totzone; intern auf 0..1000 begrenzt.
@@ -146,7 +140,6 @@ public:
   void resetDualRate();
   
 private:
-  static constexpr int16_t controlLimit = 10000; // Obergrenze für den normalisierten Joystickwert
   static constexpr int16_t inputRange   = 1000;  // Obergrenze für den ADC-Wert des Joysticks (10 Bit ADC), inklusive Totzone an den Rändern (0..1000, 0..100.0%)
   static constexpr uint8_t sizeXYcurve  = 31;    // Maximale Anzahl an Punkten für die alternative Kennlinie des Joysticks (x-y-Kurve)
 
@@ -154,7 +147,7 @@ private:
 
   /// Wendet die aktivierte Expo-Kennlinie auf 'value' an.
   /// Der Betrag wird auf 0.0..1.0 normiert, mit 'expoPower' (1.0..4.0)
-  /// potenziert und anschließend wieder auf 0..controlLimit skaliert.
+  /// potenziert und anschließend wieder auf 0..CONTROL_LIMIT skaliert.
   /// Bei deaktiviertem Expo oder einem Exponenten <= 1.0 bleibt 'value' unverändert.
   /// Kein Rückgabewert: Das Ergebnis wird direkt in 'value' gespeichert.
   void applyExpoCurve();
@@ -185,7 +178,6 @@ private:
   uint8_t  pin_trimm            = 0;        // ADC-Input-Pin für den Trimmer-Poti
   int16_t  valueRaw             = 0;        // Rohwert des Joysticks (ADC-Wert)
   int16_t  valueNormalized      = 0;        // Normalisierter Wert des Joysticks bevor weiter Expo-, xy-Kennlinien- oder Dual-Rate-Manipulationen erfolgen
-  int16_t  value                = 0;        // Normalisierter Wert des Joysticks (-controlLimit..+controlLimit)
   int16_t  trimm                = 0;        // Rohwert des Trimmers (ADC-Wert) -> Dieser wird erstmal nicht normalisiert, so ganz weiß ich noch nicht, wie der weiter verarbeitet werden soll.
   int16_t  minPoti              = 0;        // Minimalwert des Joystick-Potis (ADC-Wert)
   int16_t  maxPoti              = 0;        // Maximalwert des Joystick-Potis (ADC-Wert)
@@ -194,8 +186,8 @@ private:
   bool     thrust_config        = false;    // Zur Unterscheidung, ob es sich um den Thrust-Joystick handelt, der keine Mittelstellung hat und daher nur positive Werte liefert.
   
   // Member-Variablen für die weitere Manipulation der Joystickwerte, z.B. Dual-Rate und Expo-Kurve
-  int16_t  upperRateLimit       = 1000;     // Permilleteil (direkte Verwendung des ADC-Werts) des zu verwenden Joystickwegs für die obere Hälfte des Wertebereichs (0..+controlLimit)
-  int16_t  lowerRateLimit       = 1000;     // Permilleteil (direkte Verwendung des ADC-Werts) des zu verwenden Joystickwegs für die untere Hälfte des Wertebereichs (-controlLimit..0)
+  int16_t  upperRateLimit       = 1000;     // Permilleteil (direkte Verwendung des ADC-Werts) des zu verwenden Joystickwegs für die obere Hälfte des Wertebereichs (0..+CONTROL_LIMIT)
+  int16_t  lowerRateLimit       = 1000;     // Permilleteil (direkte Verwendung des ADC-Werts) des zu verwenden Joystickwegs für die untere Hälfte des Wertebereichs (-CONTROL_LIMIT..0)
   float    expoPower            = 1.0F;     // Expo-Funktion, wid aus dem Permillezwert expoRatePermille (0..1000‰) berechnet und auf 1.0..4.0 gemappt
   uint8_t  xyCurvePoints        = 0;        // Anzahl der Punkte in der x-y-Kurve, die zur alternativen Kennlinie verwendet werden sollen.
   int16_t  xCurve[sizeXYcurve];             // Array für x-y-Kurve zur alternativen Kennlinie, falls die Exponentialfunktion nicht ausreicht.
@@ -208,7 +200,4 @@ private:
 
 };
 
-
-
 #endif
-

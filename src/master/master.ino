@@ -1,6 +1,8 @@
 #include <util/atomic.h>
+#include "ControlSource.h"
 #include "joysticks.h"
-
+#include "servo.h"
+#include "mixer.h"
 
 
 // Serielle Schnittstelle
@@ -10,10 +12,26 @@
 #define UPDATE_PERIOD             250  // Fallback; normale Updates werden vom Display angefordert
 
 
-Joystick thrust   (JoystickType::THRUST);
-Joystick rudder   (JoystickType::RUDDER);
-Joystick elevator (JoystickType::ELEVATOR);
-Joystick aileron  (JoystickType::AILERON);
+Joystick thrust     (JoystickType::THRUST);
+Joystick rudder     (JoystickType::RUDDER);
+Joystick elevator   (JoystickType::ELEVATOR);
+Joystick aileron    (JoystickType::AILERON);
+
+Potentiometer flap(A8, PotentiometerRange::UNIPOLAR);
+ThreePositionSwitch flightMode(32, 33);
+TimedControlSource butterflyPosition;
+
+constexpr uint32_t BUTTERFLY_DEPLOY_TIME_MS = 3000;
+constexpr uint32_t BUTTERFLY_RETRACT_TIME_MS = 2000;
+constexpr int16_t BUTTERFLY_POTI_DEADBAND = 50;
+
+Servo    servoThrust(ServoConfig::PPM_MOTOR, thrust.getControlLimit(), 100);
+Servo    servoRudder(ServoConfig::PPM_SEITE, rudder.getControlLimit(), 100);;
+Servo    servoElevator(ServoConfig::PPM_HOEHE, elevator.getControlLimit(), 100);;
+Servo    servoAileronLeft(ServoConfig::PPM_QUER_LINKS, aileron.getControlLimit(), 100);;
+Servo    servoAileronRight(ServoConfig::PPM_QUER_RECHTS, aileron.getControlLimit(), 100);;
+Servo    servoFlapLeft(ServoConfig::PPM_FLAP_LINKS, aileron.getControlLimit(), 100);;
+Servo    servoFlapRight(ServoConfig::PPM_FLAP_RECHTS, aileron.getControlLimit(), 100);;
 
 #define DUAL_RATE_LEFT            A11
 #define DUAL_RATE_RIGHT           A12
@@ -32,6 +50,9 @@ int8_t  switchXYCurve       = 0;
 int8_t  switchDualRateLeft  = 0;
 int8_t  switchDualRateRight = 0;
 
+Mixer rc_setup[16];
+uint8_t rcMixerCount  = 0;
+
 uint16_t  taskCtr = 0;
 
 void setup()
@@ -49,6 +70,57 @@ void setup()
   rudder.setup();
   elevator.setup();
   aileron.setup();
+  flap.setup();
+  flightMode.setup();
+
+  MixerConfiguration defaultConfig;
+  defaultConfig.setName("RC Motor");
+  rc_setup[0].connectMixer(&thrust,   &servoThrust);
+  rc_setup[0].setConfiguration(defaultConfig);
+
+  defaultConfig.setName("RC Seite");
+  rc_setup[1].connectMixer(&rudder,   &servoRudder);
+  rc_setup[1].setConfiguration(defaultConfig);
+
+  defaultConfig.setName("RC Höhe");
+  rc_setup[2].connectMixer(&elevator, &servoElevator);
+  rc_setup[2].setConfiguration(defaultConfig);
+
+  defaultConfig.setName("RC QuerLinks");
+  rc_setup[3].connectMixer(&aileron,  &servoAileronLeft);
+  rc_setup[3].setConfiguration(defaultConfig);
+
+  defaultConfig.setName("RC QuerRechts");
+  rc_setup[4].connectMixer(&aileron,  &servoAileronRight);
+  rc_setup[4].setConfiguration(defaultConfig);
+
+  defaultConfig.setName("RC WölbLinks");
+  rc_setup[5].connectMixer(&aileron,  &servoFlapLeft);
+  rc_setup[5].setConfiguration(defaultConfig);
+
+  defaultConfig.setName("RC WölbRechts");
+  rc_setup[6].connectMixer(&aileron,  &servoFlapRight);
+  rc_setup[6].setConfiguration(defaultConfig);
+
+  defaultConfig.setName("Mixer Motor->Höhe");
+  rc_setup[7].connectMixer(&thrust,   &servoElevator);
+  rc_setup[7].setConfiguration(defaultConfig);
+
+  defaultConfig.setName("Mixer Quer->Seite");
+  rc_setup[8].connectMixer(&aileron,  &servoRudder);
+  rc_setup[8].setConfiguration(defaultConfig);
+
+  defaultConfig.setName("Mixer Butterfly");
+  rc_setup[9].connectMixer(&butterflyPosition, &servoAileronLeft);
+  rc_setup[9].setConfiguration(defaultConfig);
+  rc_setup[10].connectMixer(&butterflyPosition, &servoAileronRight);
+  rc_setup[10].setConfiguration(defaultConfig);
+  rc_setup[11].connectMixer(&butterflyPosition, &servoFlapLeft);
+  rc_setup[11].setConfiguration(defaultConfig);
+  rc_setup[12].connectMixer(&butterflyPosition, &servoFlapRight);
+  rc_setup[12].setConfiguration(defaultConfig);
+
+  rcMixerCount = 13;
 
   initDebugMonitor();
 }
@@ -64,6 +136,26 @@ void loop()
   rudder.update();  
   elevator.update();
   aileron.update();
+  flap.update();
+  flightMode.update();
+
+  const bool butterflyActive =
+    flightMode.getValue() == flightMode.getControlLimit();
+
+  if (butterflyActive)
+  {
+    const int32_t targetDifference =
+      static_cast<int32_t>(flap.getValue()) - butterflyPosition.getTarget();
+
+    if (abs(targetDifference) >= BUTTERFLY_POTI_DEADBAND)
+      butterflyPosition.setTarget(flap.getValue(), BUTTERFLY_DEPLOY_TIME_MS);
+  }
+  else
+  {
+    butterflyPosition.setTarget(0, BUTTERFLY_RETRACT_TIME_MS);
+  }
+
+  butterflyPosition.update();
 
   expo = analogRead(EXPO);
   if (switchExpo)
@@ -128,11 +220,24 @@ void loop()
     elevator.resetDualRate();
     aileron.resetDualRate();
   }
-  
+
+  servoThrust.clearServo();
+  servoRudder.clearServo();
+  servoElevator.clearServo();
+  servoAileronLeft.clearServo();
+  servoAileronRight.clearServo();
+  servoFlapLeft.clearServo();
+  servoFlapRight.clearServo();
+
+  for (uint8_t mixerIndex = 0; mixerIndex < rcMixerCount; ++mixerIndex)
+  {
+    rc_setup[mixerIndex].runMixer();
+  }
+
   updateDebugMonitor();
 
   delay(100);
-  
+
 }
 // -----------------------------------------------------------------------------------------------------
 
