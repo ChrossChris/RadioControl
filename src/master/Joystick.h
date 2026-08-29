@@ -5,52 +5,94 @@
 #include <Arduino.h>
 #include "RcBaseInput.h"
 
-// Definitionen/Konfiguration für die vorliegende RC-Hardware, muss bei anderer Hardware entsprechend ausgelesen und
-// angepasst werden.
-
+/// Hardwareabhaengige Konfiguration der vier Joystickkanaele und ihrer Trimmer.
+///
+/// Fuer jeden Kanal werden die analogen Eingangspins, die im eingebauten Zustand
+/// gemessenen Potentiometergrenzen, die anfaengliche Totzone und die
+/// Grundrichtung festgelegt. Die Werte gelten fuer die aktuell verwendete
+/// Fernsteuerungshardware und muessen bei abweichender Mechanik, Verdrahtung
+/// oder Potentiometerkalibrierung neu bestimmt werden.
+///
+/// Potentiometergrenzen und Totzonen sind rohe Messschritte des 10-Bit-ADCs.
+/// Ein Richtungsflag mit dem Wert true negiert den normierten Steuerwert vor
+/// der Anwendung von Kennlinien und Dual Rate.
 namespace JoystickConfig
 {
   // Analoge Kanäle für die Joysticks und Trimmer
-  constexpr uint8_t THRUST            = A0;
-  constexpr uint8_t TRIMM_THRUST      = A1;
-  constexpr uint8_t RUDDER            = A2;
-  constexpr uint8_t TRIMM_RUDDER      = A3;
-  constexpr uint8_t ELEVATOR          = A4;
-  constexpr uint8_t TRIMM_ELEVATOR    = A5;
-  constexpr uint8_t AILERON           = A6;
-  constexpr uint8_t TRIMM_AILERON     = A7;
+  constexpr uint8_t THRUST            = A0;    ///< Eingang des nicht zentrierenden Schubknueppels.
+  constexpr uint8_t TRIMM_THRUST      = A1;    ///< Eingang des zugehoerigen Schubtrimmers.
+  constexpr uint8_t RUDDER            = A2;    ///< Eingang des Seitenruderknueppels.
+  constexpr uint8_t TRIMM_RUDDER      = A3;    ///< Eingang des Seitenrudertrimmers.
+  constexpr uint8_t ELEVATOR          = A4;    ///< Eingang des Hoehenruderknueppels.
+  constexpr uint8_t TRIMM_ELEVATOR    = A5;    ///< Eingang des Hoehenrudertrimmers.
+  constexpr uint8_t AILERON           = A6;    ///< Eingang des Querruderknueppels.
+  constexpr uint8_t TRIMM_AILERON     = A7;    ///< Eingang des Querrudertrimmers.
 
   // Poti-Grenzen der Joysticks
-  constexpr int16_t POTI_MAX_THRUST   = 880; 
-  constexpr int16_t POTI_MIN_THRUST   = 114;
-  constexpr int16_t POTI_MAX_RUDDER   = 896; 
-  constexpr int16_t POTI_MIN_RUDDER   = 106;
-  constexpr int16_t POTI_MAX_ELEVATOR = 885; 
-  constexpr int16_t POTI_MIN_ELEVATOR = 127;
-  constexpr int16_t POTI_MAX_AILERON  = 920; 
-  constexpr int16_t POTI_MIN_AILERON  = 125;
+  constexpr int16_t POTI_MAX_THRUST   = 880;   ///< Oberer ADC-Grenzwert des Schubknueppels.
+  constexpr int16_t POTI_MIN_THRUST   = 114;   ///< Unterer ADC-Grenzwert und Nullstellung des Schubknueppels.
+  constexpr int16_t POTI_MAX_RUDDER   = 896;   ///< Oberer ADC-Grenzwert des Seitenruderknueppels.
+  constexpr int16_t POTI_MIN_RUDDER   = 106;   ///< Unterer ADC-Grenzwert des Seitenruderknueppels.
+  constexpr int16_t POTI_MAX_ELEVATOR = 885;   ///< Oberer ADC-Grenzwert des Hoehenruderknueppels.
+  constexpr int16_t POTI_MIN_ELEVATOR = 127;   ///< Unterer ADC-Grenzwert des Hoehenruderknueppels.
+  constexpr int16_t POTI_MAX_AILERON  = 920;   ///< Oberer ADC-Grenzwert des Querruderknueppels.
+  constexpr int16_t POTI_MIN_AILERON  = 125;   ///< Unterer ADC-Grenzwert des Querruderknueppels.
 
   // Deadzone um die Mittelstellung der Joysticks, in der der Wert auf 0 gesetzt wird (ADC-Wert)
-  constexpr int16_t DEADBAND_THRUST   = 50;
-  constexpr int16_t DEADBAND_RUDDER   = 25;
-  constexpr int16_t DEADBAND_ELEVATOR = 25;
-  constexpr int16_t DEADBAND_AILERON  = 25;
-  constexpr bool    INVERSE_THRUST    = false;
-  constexpr bool    INVERSE_RUDDER    = true;
-  constexpr bool    INVERSE_ELEVATOR  = false;
-  constexpr bool    INVERSE_AILERON   = true;
+  constexpr int16_t DEADBAND_THRUST   = 50;    ///< Untere Totzone des Schubknueppels in ADC-Schritten.
+  constexpr int16_t DEADBAND_RUDDER   = 25;    ///< Halbe Totzone des Seitenruderknueppels in ADC-Schritten.
+  constexpr int16_t DEADBAND_ELEVATOR = 25;    ///< Halbe Totzone des Hoehenruderknueppels in ADC-Schritten.
+  constexpr int16_t DEADBAND_AILERON  = 25;    ///< Halbe Totzone des Querruderknueppels in ADC-Schritten.
+  constexpr bool    INVERSE_THRUST    = false; ///< Grundrichtung des Schubknueppels.
+  constexpr bool    INVERSE_RUDDER    = true;  ///< Grundrichtung des Seitenruderknueppels.
+  constexpr bool    INVERSE_ELEVATOR  = false; ///< Grundrichtung des Hoehenruderknueppels.
+  constexpr bool    INVERSE_AILERON   = true;  ///< Grundrichtung des Querruderknueppels.
 }
 
 
+/// Waehlt einen der vier fest in JoystickConfig konfigurierten Steuerkanaele.
+/// Der Typ bestimmt Pins, Kalibriergrenzen, anfaengliche Totzone,
+/// Grundrichtung und die Behandlung als zentrierender oder nicht zentrierender
+/// Steuerknueppel.
 enum class JoystickType : uint8_t
 {
-  THRUST,
-  RUDDER,
-  ELEVATOR,
-  AILERON
+  THRUST,   ///< Nicht zentrierender Schubkanal; ohne Invertierung 0..CONTROL_LIMIT.
+  RUDDER,   ///< Zentrierender Seitenruderkanal; -CONTROL_LIMIT..+CONTROL_LIMIT.
+  ELEVATOR, ///< Zentrierender Hoehenruderkanal; -CONTROL_LIMIT..+CONTROL_LIMIT.
+  AILERON   ///< Zentrierender Querruderkanal; -CONTROL_LIMIT..+CONTROL_LIMIT.
 };
 
 
+/// Erfasst und verarbeitet einen analogen Steuerknueppelkanal der
+/// Fernsteuerung einschliesslich des zugeordneten Trimmers.
+///
+/// Der beim Konstruktor angegebene JoystickType bestimmt die in
+/// JoystickConfig hinterlegten Eingangspins, Potentiometergrenzen, die
+/// anfaengliche Totzone und die Auswerterichtung. RUDDER, ELEVATOR und AILERON
+/// werden um eine beim Einschalten ermittelte Mittelstellung ausgewertet;
+/// THRUST besitzt keine selbstzentrierende Mittelstellung und verwendet die
+/// konfigurierte untere Potentiometergrenze als Nullstellung.
+///
+/// Die Erfassung ist entsprechend RcBaseInput zweistufig aufgebaut: setup()
+/// initialisiert die Eingaenge und bestimmt bei zentrierenden Kanaelen die
+/// Mittelstellung. update() liest Joystick und Trimmer ein und speichert den
+/// vollstaendig aufbereiteten Steuerwert. getValue() liefert diesen Wert danach
+/// ohne erneuten ADC-Zugriff. Vor dem ersten update() liefert getValue() den in
+/// RcBaseInput definierten Initialwert 0.
+///
+/// Die Verarbeitung in update() erfolgt in dieser Reihenfolge:
+/// - Begrenzung des ADC-Werts auf die kalibrierten Potentiometergrenzen;
+/// - Anwendung der Totzone und Normierung auf den Steuerbereich;
+/// - optionale Richtungsumkehr;
+/// - optionale Expo- oder XY-Kennlinie;
+/// - optionale Dual-Rate-Skalierung.
+///
+/// Expo- und XY-Kennlinie schliessen sich gegenseitig aus; die jeweils zuletzt
+/// gesetzte Kennlinienart deaktiviert die andere. Dual Rate kann zusaetzlich
+/// auf das Ergebnis angewendet werden. Zentrierende Kanaele liefern grundsaetzlich
+/// -CONTROL_LIMIT..+CONTROL_LIMIT. THRUST liefert ohne Richtungsumkehr
+/// 0..CONTROL_LIMIT. Der Trimmer wird separat als nicht normierter ADC-Wert
+/// gespeichert und ist nicht Bestandteil des von getValue() gelieferten Werts.
 class Joystick : public RcBaseInput
 {
 
@@ -88,12 +130,6 @@ public:
   /// Wertebereich bei einem 10-Bit-ADC: -512..+511.
   /// @return Letzter Trimmerwert im Bereich -512..+511.
   int16_t getTrimmValueRaw() const { return trimm; }
-
-  /// Liefert den Betrag des gemeinsamen normierten Steuerbereichs.
-  /// Ein ausdruecklich unnormierter Eingabemodus darf davon abweichen.
-  /// @return Positive Grenze des normierten Bereichs (definiert in RcBaseInput).
-  int16_t getControlLimit() const { return CONTROL_LIMIT; }
-
 
   /// Setzt die Totzone beiderseits der Mittelstellung in ADC-Schritten.
   /// @param centerDeadBandADC Gewünschte Totzone; intern auf 0..1000 begrenzt.

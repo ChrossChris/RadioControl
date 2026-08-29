@@ -1,4 +1,4 @@
-#include "mixer.h"
+#include "Mixer.h"
 
 void MixerConfiguration::setName(const char* newName)
 {
@@ -28,12 +28,12 @@ Mixer::Mixer()
 }
 
 
-Mixer::Mixer(const ControlSource* source,
-                   Servo*    servo,
-             const int8_t    gainPositive,
-             const int8_t    gainNegative,
-             const uint8_t   deadBandPercent,
-             const int8_t    offsetPercent)
+Mixer::Mixer(const RcBaseInput* source,
+                   Servo*       servo,
+             const int8_t       gainPositive,
+             const int8_t       gainNegative,
+             const uint8_t      deadBandPercent,
+             const int8_t       offsetPercent)
   : Mixer()
 {
   setGain(gainPositive, gainNegative);
@@ -44,7 +44,7 @@ Mixer::Mixer(const ControlSource* source,
 }
 
 
-Mixer::Mixer(const ControlSource* source,
+Mixer::Mixer(const RcBaseInput* source,
              Servo* servo,
              const MixerConfiguration& configuration)
   : Mixer()
@@ -78,7 +78,7 @@ Mixer::Mixer(const Mixer& source, Servo* newServo, const MixerGainMode gainMode)
 }
 
 
-bool Mixer::connectMixer(const ControlSource* source,
+bool Mixer::connectMixer(const RcBaseInput* source,
                          Servo* servo,
                          const MixerConfigMode configMode)
 {

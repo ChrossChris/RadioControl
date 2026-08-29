@@ -1,8 +1,9 @@
 #include <util/atomic.h>
-#include "ControlSource.h"
-#include "joysticks.h"
-#include "servo.h"
-#include "mixer.h"
+#include "Joystick.h"
+#include "Potentiometer.h"
+#include "Switch.h"
+#include "Servo.h"
+#include "Mixer.h"
 
 
 // Serielle Schnittstelle
@@ -19,7 +20,7 @@ Joystick aileron    (JoystickType::AILERON);
 
 Potentiometer flap(A8, PotentiometerRange::UNIPOLAR);
 ThreePositionSwitch flightMode(32, 33);
-TimedControlSource butterflyPosition;
+Potentiometer butterflyPosition;
 
 constexpr uint32_t BUTTERFLY_DEPLOY_TIME_MS = 3000;
 constexpr uint32_t BUTTERFLY_RETRACT_TIME_MS = 2000;

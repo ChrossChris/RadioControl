@@ -34,6 +34,11 @@ public:
   ///         von der abgeleiteten Klasse beziehungsweise ihrem Modus abhaengig.
   int16_t getValue() const { return value; }
 
+  /// Liefert den Betrag des gemeinsamen normierten Steuerbereichs.
+  /// Ein ausdruecklich unnormierter Eingabemodus darf davon abweichen.
+  /// @return Positive Grenze des normierten Bereichs (aktuell 10000).
+  int16_t getControlLimit() const { return CONTROL_LIMIT; }
+
   /// Ermoeglicht die korrekte Zerstoerung abgeleiteter Objekte ueber einen
   /// Zeiger auf RcBaseInput.
   virtual ~RcBaseInput() = default;

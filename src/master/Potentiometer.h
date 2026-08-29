@@ -42,11 +42,6 @@ public:
   /// Kein Rueckgabewert: Das Ergebnis wird mit getValue() abgefragt.
   void update() override;
 
-  /// Liefert den Betrag des gemeinsamen normierten Steuerbereichs.
-  /// Ein ausdruecklich unnormierter Eingabemodus darf davon abweichen.
-  /// @return Positive Grenze des normierten Bereichs (definiert in RcBaseInput).
-  int16_t getControlLimit() const { return CONTROL_LIMIT; }
-
   /// Aendert die Auswerterichtung der normierten Potentiometermodi.
   /// Der gespeicherte Wert wird nicht rueckwirkend geaendert; die neue Richtung
   /// wirkt ab dem naechsten update(). Im Modus RAW hat sie keine Wirkung.
