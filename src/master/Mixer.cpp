@@ -1,139 +1,49 @@
 #include "Mixer.h"
 
-void MixerConfiguration::setName(const char* newName)
+
+
+Mixer::Mixer(const MixerType            type,
+             const RcBaseInput&         source,
+             Servo&                     servo)
+  : type(type),
+    source(&source), 
+    servo(&servo),
+    controlLimit(source.getControlLimit())
 {
-  if (newName == nullptr)
-  {
-    name[0] = '\0';
-    return;
-  }
-
-  uint8_t index = 0;
-
-  while ((index < maxNameLength) && (newName[index] != '\0'))
-  {
-    name[index] = newName[index];
-    ++index;
-  }
-
-  name[index] = '\0';
+  const MixerConfiguration defaultConfiguration;
+  setConfiguration(defaultConfiguration);
+  enabled = true;
 }
 
 
-Mixer::Mixer()
-  : source(nullptr),
-    servo(nullptr),
-    enabled(false)
-{
-}
-
-
-Mixer::Mixer(const RcBaseInput* source,
-                   Servo*       servo,
-             const int8_t       gainPositive,
-             const int8_t       gainNegative,
-             const uint8_t      deadBandPercent,
-             const int8_t       offsetPercent)
-  : Mixer()
-{
-  setGain(gainPositive, gainNegative);
-  setDeadBand(deadBandPercent);
-  setOffset(offsetPercent);
-
-  if (!connectMixer(source, servo, MixerConfigMode::KEEP)) resetMixer();
-}
-
-
-Mixer::Mixer(const RcBaseInput* source,
-             Servo* servo,
-             const MixerConfiguration& configuration)
-  : Mixer()
+Mixer::Mixer(const MixerType            type,
+             const RcBaseInput&         source,
+             Servo&                     servo,
+             const MixerConfiguration&  configuration)
+  : type(type),
+    source(&source), 
+    servo(&servo), 
+    controlLimit(source.getControlLimit())
 {
   setConfiguration(configuration);
-
-  if (!connectMixer(source, servo, MixerConfigMode::KEEP)) resetMixer();
+  enabled = true;
 }
 
 
-Mixer::Mixer(const Mixer& source, Servo* newServo, const MixerGainMode gainMode)
-  : Mixer()
+void  Mixer::deactivateMixer()                            { enabled = false;           }
+void  Mixer::activateMixer()                              { enabled = true;            }
+MixerType Mixer::getType() const                          { return type;               }
+const MixerConfiguration& Mixer::getConfiguration() const { return configuration;      }
+
+
+void Mixer::setConfiguration(const MixerConfiguration& configuration)
 {
-  configuration = source.configuration;
+  setGain(configuration.gainPositive, configuration.gainNegative);
+  this->configuration.offsetPercent = constrain(configuration.offsetPercent, -100, 100);
+  this->configuration.deadBandLowerPercent = constrain(configuration.deadBandLowerPercent, -100, 0);
+  this->configuration.deadBandUpperPercent = constrain(configuration.deadBandUpperPercent, 0, 100);
 
-  if (gainMode == MixerGainMode::SWAP)
-  {
-    const int8_t gainPositive     = configuration.gainPositive;
-    configuration.gainPositive    = configuration.gainNegative;
-    configuration.gainNegative    = gainPositive;
-  }
-
-  if (!connectMixer(source.source, newServo, MixerConfigMode::KEEP))
-  {
-    resetMixer();
-  }
-  else if (!source.enabled)
-  {
-    deactivateMixer();
-  }
-}
-
-
-bool Mixer::connectMixer(const RcBaseInput* source,
-                         Servo* servo,
-                         const MixerConfigMode configMode)
-{
-  if ((source == nullptr) || (servo == nullptr))   enabled = false;
-  else
-  {
-    this->source = source;
-    this->servo  = servo;
-    controlLimit = source->getControlLimit();
-
-    if (configMode == MixerConfigMode::RESET) resetConfiguration();
-    else                                      updateScaledConfiguration();
-
-    enabled = true;
-  }
-
-  return enabled;
-}
-
-
-void Mixer::resetConfiguration()
-{
-  configuration = MixerConfiguration{};
-  updateScaledConfiguration();
-}
-
-
-void Mixer::resetMixer()
-{
-  source       = nullptr;
-  servo        = nullptr;
-  controlLimit = 0;
-  enabled      = false;
-
-  resetConfiguration();
-}
-
-
-void Mixer::deactivateMixer()
-{
-  enabled = false;
-}
-
-
-bool Mixer::activateMixer()
-{
-  if ((source == nullptr) || (servo == nullptr))  enabled = false;
-  else
-  {  
-    controlLimit = source->getControlLimit();
-    updateScaledConfiguration();
-    enabled = true;
-  }
-
-  return enabled;
+  updateConfiguration();
 }
 
 
@@ -147,34 +57,16 @@ void Mixer::setGain(int8_t gainPositive, int8_t gainNegative)
 void Mixer::setOffset(int8_t offsetPercent)
 {
   configuration.offsetPercent = constrain(offsetPercent, -100, 100);
-  updateScaledConfiguration();
+  updateConfiguration();
 }
 
-
-void Mixer::setConfiguration(const MixerConfiguration& configuration)
-{
-  setName(configuration.name);
-  setGain(configuration.gainPositive, configuration.gainNegative);
-  this->configuration.offsetPercent = constrain(configuration.offsetPercent, -100, 100);
-  this->configuration.deadBandLowerPercent = constrain(configuration.deadBandLowerPercent, -100, 0);
-  this->configuration.deadBandUpperPercent = constrain(configuration.deadBandUpperPercent, 0, 100);
-
-  updateScaledConfiguration();
-}
-
-
-const MixerConfiguration& Mixer::getConfiguration() const
-{
-  return configuration;
-}
-
-  
+ 
 void Mixer::setDeadBandLimits(const int8_t lowerLimitPercent, const int8_t upperLimitPercent)
 {
   configuration.deadBandLowerPercent = constrain(lowerLimitPercent, -100, 0);
   configuration.deadBandUpperPercent = constrain(upperLimitPercent, 0, 100);
 
-  updateScaledConfiguration();
+  updateConfiguration();
 }
   
 
@@ -184,11 +76,11 @@ void Mixer::setDeadBand(const uint8_t deadBandPercent)
   configuration.deadBandLowerPercent = -(width / 2);
   configuration.deadBandUpperPercent = width + configuration.deadBandLowerPercent;
 
-  updateScaledConfiguration();
+  updateConfiguration();
 }
 
 
-void Mixer::updateScaledConfiguration()
+void Mixer::updateConfiguration()
 {
   int32_t percent = configuration.offsetPercent;
 
@@ -227,13 +119,13 @@ void Mixer::runMixer()
 }
 
 
-void Mixer::setName(const char* name)
-{
-  configuration.setName(name);
-}
 
 
-const char* Mixer::getName() const
-{
-  return configuration.name;
-}
+
+
+
+
+
+
+
+

@@ -13,15 +13,26 @@ Potentiometer::Potentiometer(const uint8_t           pin,
 
 
 // -------------------------------------------------------------------------------------------------------------------
-void Potentiometer::setup()                                   { pinMode(pin, INPUT); }
-void Potentiometer::setDirection(const bool inverseDirection) { this->inverseDirection = inverseDirection; }
+void Potentiometer::setup() 
+{ 
+  pinMode(pin, INPUT); 
+  if (potiType == PotentiometerType::CONTINUOUS) oldSector = analogRead(pin) / sectorWidth;  
+}
+// -------------------------------------------------------------------------------------------------------------------
+
+
+// -------------------------------------------------------------------------------------------------------------------
+void Potentiometer::setDirection(const bool inverseDirection)
+{
+  this->inverseDirection = inverseDirection;
+}
 // -------------------------------------------------------------------------------------------------------------------
 
 
 // -------------------------------------------------------------------------------------------------------------------
 void Potentiometer::update()
 {
-  const int16_t rawValue    = analogRead(pin);
+  const int16_t rawValue = analogRead(pin);
 
   switch (potiType)
   {
@@ -57,8 +68,32 @@ void Potentiometer::update()
     }
     case PotentiometerType::CONTINUOUS:
     {
-      if (inverseDirection) value = map(maxRawValue-rawValue, 0, maxRawValue, 0, CONTROL_LIMIT);
-      else                  value = map(            rawValue, 0, maxRawValue, 0, CONTROL_LIMIT);
+      const int16_t positionInSector  = rawValue % sectorWidth;
+      if (  (positionInSector  <   sectorHysteresis) 
+         || (positionInSector  >= (sectorWidth - sectorHysteresis)) ) break;
+
+      const int16_t sector = rawValue / sectorWidth;
+      int16_t delta = sector - oldSector;
+
+      // Korrigiert den Umlaufpunkt zwischen dem letzten und ersten Sektor.
+      // Durch halfSectorCount wird die richtige Zählweise geprüft, falls
+      // bei der Abtastung ein oder mehrere Sektoren übersprungen wurde.
+      const int16_t halfSectorCount = sectorCount / 2;
+      if      (delta >  halfSectorCount)  delta -= sectorCount;
+      else if (delta < -halfSectorCount)  delta += sectorCount;
+
+      if   (inverseDirection) value -= delta;
+      else                    value += delta;
+
+      oldSector = sector;
+
+      // Wird CONTROL_LIMIT überschritten, beginnt die relative Zählung wieder
+      // bei 0. Nach ungefähr CONTROL_LIMIT / sectorCount vollständigen Umdrehungen
+      // in derselben Richtung wird die Grenze überschritten. Bspw. bei 16 Sektoren
+      // pro Umdrehung tritt dies erst nach 10000 / 16 = 625 vollständigen Umdrehungen
+      // in derselben Richtung auf. Es ist also ausreichend Puffer vorhanden.
+      if ((value > CONTROL_LIMIT) || (value < -CONTROL_LIMIT)) value = 0;
+
       break;
     }
     default:

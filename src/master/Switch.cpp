@@ -57,29 +57,35 @@ void Switch::update()
   switch (switchType)
   {
     case SwitchType::STANDARD:
-      value = digitalRead(pin0);
+      state = digitalRead(pin0);
       break;
     case SwitchType::STANDARD_WITH_CENTER_POSITION:
-      if      (digitalRead(pin0) == HIGH)  value = 0;
-      else if (digitalRead(pin1) == HIGH)  value = 2;
-      else                              value = 1;
+      if      (digitalRead(pin0) == HIGH)  state = 0;
+      else if (digitalRead(pin1) == HIGH)  state = 2;
+      else                                 state = 1;
       break;
     case SwitchType::ROTARY_FOUR_POSITION:
-      if      (digitalRead(pin0) == HIGH)  value = 0;
-      else if (digitalRead(pin1) == HIGH)  value = 1;
-      else if (digitalRead(pin2) == HIGH)  value = 2;
-      else if (digitalRead(pin3) == HIGH)  value = 3;
+      if      (digitalRead(pin0) == HIGH)  state = 0;
+      else if (digitalRead(pin1) == HIGH)  state = 1;
+      else if (digitalRead(pin2) == HIGH)  state = 2;
+      else if (digitalRead(pin3) == HIGH)  state = 3;
       break;
     case SwitchType::ROTARY_FIVE_POSITION:
-      if      (digitalRead(pin0) == HIGH)  value = 0;
-      else if (digitalRead(pin1) == HIGH)  value = 1;
-      else if (digitalRead(pin2) == HIGH)  value = 2;
-      else if (digitalRead(pin3) == HIGH)  value = 3;
-      else if (digitalRead(pin4) == HIGH)  value = 4;
+      if      (digitalRead(pin0) == HIGH)  state = 0;
+      else if (digitalRead(pin1) == HIGH)  state = 1;
+      else if (digitalRead(pin2) == HIGH)  state = 2;
+      else if (digitalRead(pin3) == HIGH)  state = 3;
+      else if (digitalRead(pin4) == HIGH)  state = 4;
       break;
     default:
-      value = 0;
+      state = 0;
   } 
 
+}
+
+
+uint8_t Switch::getState() const
+{
+  return state;
 }
 

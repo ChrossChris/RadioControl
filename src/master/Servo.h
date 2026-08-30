@@ -4,6 +4,7 @@
 
 #include <Arduino.h>
 
+
 namespace ServoConfig
 {
   constexpr uint16_t CENTER_VALUE   = 1500; // 1,5ms: Mittelstellung des PPM-Signals, das den Servo ansteuert

@@ -6,239 +6,100 @@
 #include "Mixer.h"
 
 
-// Serielle Schnittstelle
-#define BAUD_RATE                 57600
-#define SERIAL_START              255
-#define SERIAL_END                128
-#define UPDATE_PERIOD             250  // Fallback; normale Updates werden vom Display angefordert
+Joystick  thrust   (JoystickType::THRUST);
+Joystick  rudder   (JoystickType::RUDDER);
+Joystick  elevator (JoystickType::ELEVATOR);
+Joystick  aileron  (JoystickType::AILERON);
+Joystick* joysticks[] {&thrust, &rudder, &elevator, &aileron};
+constexpr uint8_t joystickCount = sizeof(joysticks) / sizeof(joysticks[0]);;
+
+Potentiometer  potiMain(PotentiometerPorts::MAIN, PotentiometerType::CONTINUOUS);
+Potentiometer  expoAileron(PotentiometerPorts::LEFT1, PotentiometerType::NORMAL);
+Potentiometer  expoElevator(PotentiometerPorts::LEFT2, PotentiometerType::NORMAL);
+Potentiometer  flightModusGain(PotentiometerPorts::RIGHT1, PotentiometerType::SYMMETRIC_WITH_DEADBAND);
+Potentiometer  potiCenterLeft(PotentiometerPorts::CENTER_LEFT, PotentiometerType::NORMAL);
+Potentiometer  potiCenterRight(PotentiometerPorts::CENTER_RIGHT, PotentiometerType::NORMAL);
+Potentiometer  potiRightContinuous(PotentiometerPorts::RIGHT2_CONT, PotentiometerType::CONTINUOUS);
+Potentiometer* potentiometers[] {&potiMain, &expoAileron, &expoElevator, &flightModusGain, &potiCenterLeft, &potiCenterRight, &potiRightContinuous};
+constexpr uint8_t potentiometerCount = sizeof(potentiometers) / sizeof(potentiometers[0]);
+
+Switch  flightModusSelector(SwitchPorts::RIGHT2_3PST_POS1, SwitchPorts::RIGHT2_3PST_POS2);
+Switch  switchLeft1(SwitchPorts::LEFT1);
+Switch  switchLeft2(SwitchPorts::LEFT2);
+Switch  switchRight(SwitchPorts::RIGHT1);
+Switch  switchCenterLeft(SwitchPorts::CENTER_LEFT);
+Switch  switchCenterRight(SwitchPorts::CENTER_RIGHT);
+Switch  switchMain1(SwitchPorts::MAIN1);
+Switch  switchMain2_3pos(SwitchPorts::MAIN2_3PST_POS1, SwitchPorts::MAIN2_3PST_POS2);
+Switch  switchMain3(SwitchPorts::MAIN3);
+Switch  switchMain4_3pos(SwitchPorts::MAIN4_3PST_POS1, SwitchPorts::MAIN4_3PST_POS2);
+Switch  switch4Pos(SwitchPorts::RIGHT_ROTARY_POS1, SwitchPorts::RIGHT_ROTARY_POS2, SwitchPorts::RIGHT_ROTARY_POS3, SwitchPorts::RIGHT_ROTARY_POS4);
+Switch* switches[] {&flightModusSelector, &switchLeft1, &switchLeft2, &switchRight, &switchCenterLeft, &switchCenterRight, &switchMain1, &switchMain2_3pos, &switchMain3, &switchMain4_3pos, &switch4Pos};
+constexpr uint8_t switchCount = sizeof(switches) / sizeof(switches[0]);
+
+Servo  servoThrust(ServoConfig::PPM_MOTOR, thrust.getControlLimit(), 100);
+Servo  servoRudder(ServoConfig::PPM_SEITE, rudder.getControlLimit(), 100);
+Servo  servoElevator(ServoConfig::PPM_HOEHE, elevator.getControlLimit(), 100);
+Servo  servoAileronLeft(ServoConfig::PPM_QUER_LINKS, aileron.getControlLimit(), 100);
+Servo  servoAileronRight(ServoConfig::PPM_QUER_RECHTS, aileron.getControlLimit(), 100);
+Servo  servoFlapLeft(ServoConfig::PPM_FLAP_LINKS, aileron.getControlLimit(), 100);
+Servo  servoFlapRight(ServoConfig::PPM_FLAP_RECHTS, aileron.getControlLimit(), 100);
+Servo* servos[] {&servoThrust, &servoRudder, &servoElevator, &servoAileronLeft, &servoAileronRight, &servoFlapLeft, &servoFlapRight};
+constexpr uint8_t servoCount = sizeof(servos) / sizeof(servos[0]);
+
+const MixerConfiguration defaultConfig;
+Mixer rcMixerSetup[]
+{
+  {MixerType::THRUST,                   thrust,          servoThrust      },
+  {MixerType::RUDDER,                   rudder,          servoRudder      },
+  {MixerType::ELEVATOR,                 elevator,        servoElevator    },
+  {MixerType::AILERON_LEFT,             aileron,         servoAileronLeft },
+  {MixerType::AILERON_RIGHT,            aileron,         servoAileronRight},
+  {MixerType::AILERON_FLAP_LEFT,        aileron,         servoFlapLeft    },
+  {MixerType::AILERON_FLAP_RIGHT,       aileron,         servoFlapRight   },
+  {MixerType::FLIGHTMODE_AILERON_LEFT,  flightModusGain, servoAileronLeft },
+  {MixerType::FLIGHTMODE_AILERON_RIGHT, flightModusGain, servoAileronRight},
+  {MixerType::FLIGHTMODE_FLAP_LEFT,     flightModusGain, servoFlapLeft    },
+  {MixerType::FLIGHTMODE_FLAP_RIGHT,    flightModusGain, servoFlapRight   },
+  {MixerType::AILERON_RUDDER,           aileron,         servoRudder      },
+  {MixerType::THRUST_ELEVATOR,          thrust,          servoElevator    }
+};
+constexpr uint8_t rcMixerCount = sizeof(rcMixerSetup) / sizeof(rcMixerSetup[0]);
 
 
-Joystick thrust     (JoystickType::THRUST);
-Joystick rudder     (JoystickType::RUDDER);
-Joystick elevator   (JoystickType::ELEVATOR);
-Joystick aileron    (JoystickType::AILERON);
+Mixer* getMixer(const MixerType type)
+{
+  for (uint8_t idx = 0; idx < rcMixerCount; ++idx) 
+  {
+    if (rcMixerSetup[idx].getType() == type)  return &rcMixerSetup[idx];
+  }
+  
+  return nullptr;
+}
 
-Potentiometer flap(A8, PotentiometerRange::UNIPOLAR);
-ThreePositionSwitch flightMode(32, 33);
-Potentiometer butterflyPosition;
-
-constexpr uint32_t BUTTERFLY_DEPLOY_TIME_MS = 3000;
-constexpr uint32_t BUTTERFLY_RETRACT_TIME_MS = 2000;
-constexpr int16_t BUTTERFLY_POTI_DEADBAND = 50;
-
-Servo    servoThrust(ServoConfig::PPM_MOTOR, thrust.getControlLimit(), 100);
-Servo    servoRudder(ServoConfig::PPM_SEITE, rudder.getControlLimit(), 100);;
-Servo    servoElevator(ServoConfig::PPM_HOEHE, elevator.getControlLimit(), 100);;
-Servo    servoAileronLeft(ServoConfig::PPM_QUER_LINKS, aileron.getControlLimit(), 100);;
-Servo    servoAileronRight(ServoConfig::PPM_QUER_RECHTS, aileron.getControlLimit(), 100);;
-Servo    servoFlapLeft(ServoConfig::PPM_FLAP_LINKS, aileron.getControlLimit(), 100);;
-Servo    servoFlapRight(ServoConfig::PPM_FLAP_RECHTS, aileron.getControlLimit(), 100);;
-
-#define DUAL_RATE_LEFT            A11
-#define DUAL_RATE_RIGHT           A12
-#define EXPO                      A13
-#define SWITCH_XY_CURVE           20
-#define SWITCH_EXPO               21
-#define SWITCH_DUALRATE_LEFT      27
-#define SWITCH_DUALRATE_RIGHT     29
-
-
-int16_t expo                = 0;
-int16_t dualRateLeft        = 0;
-int16_t dualRateRight       = 0;
-int8_t  switchExpo          = 0;
-int8_t  switchXYCurve       = 0;
-int8_t  switchDualRateLeft  = 0;
-int8_t  switchDualRateRight = 0;
-
-Mixer rc_setup[16];
-uint8_t rcMixerCount  = 0;
-
-uint16_t  taskCtr = 0;
 
 void setup()
 {
-  pinMode(SWITCH_EXPO, INPUT);
-  pinMode(SWITCH_XY_CURVE, INPUT);
-  pinMode(SWITCH_DUALRATE_LEFT, INPUT);
-  pinMode(SWITCH_DUALRATE_RIGHT, INPUT);
-
-  pinMode(EXPO, INPUT);
-  pinMode(DUAL_RATE_LEFT, INPUT);
-  pinMode(DUAL_RATE_RIGHT, INPUT);
+  for (uint8_t idx = 0; idx < joystickCount;      idx++) joysticks[idx]->setup();
+  for (uint8_t idx = 0; idx < potentiometerCount; idx++) potentiometers[idx]->setup();
+  for (uint8_t idx = 0; idx < switchCount;        idx++) switches[idx]->setup();
   
-  thrust.setup();
-  rudder.setup();
-  elevator.setup();
-  aileron.setup();
-  flap.setup();
-  flightMode.setup();
+  Mixer* rudderMixer = getMixer(MixerType::RUDDER);
+  if (rudderMixer != nullptr) rudderMixer->setGain(80, 80);
 
-  MixerConfiguration defaultConfig;
-  defaultConfig.setName("RC Motor");
-  rc_setup[0].connectMixer(&thrust,   &servoThrust);
-  rc_setup[0].setConfiguration(defaultConfig);
-
-  defaultConfig.setName("RC Seite");
-  rc_setup[1].connectMixer(&rudder,   &servoRudder);
-  rc_setup[1].setConfiguration(defaultConfig);
-
-  defaultConfig.setName("RC Höhe");
-  rc_setup[2].connectMixer(&elevator, &servoElevator);
-  rc_setup[2].setConfiguration(defaultConfig);
-
-  defaultConfig.setName("RC QuerLinks");
-  rc_setup[3].connectMixer(&aileron,  &servoAileronLeft);
-  rc_setup[3].setConfiguration(defaultConfig);
-
-  defaultConfig.setName("RC QuerRechts");
-  rc_setup[4].connectMixer(&aileron,  &servoAileronRight);
-  rc_setup[4].setConfiguration(defaultConfig);
-
-  defaultConfig.setName("RC WölbLinks");
-  rc_setup[5].connectMixer(&aileron,  &servoFlapLeft);
-  rc_setup[5].setConfiguration(defaultConfig);
-
-  defaultConfig.setName("RC WölbRechts");
-  rc_setup[6].connectMixer(&aileron,  &servoFlapRight);
-  rc_setup[6].setConfiguration(defaultConfig);
-
-  defaultConfig.setName("Mixer Motor->Höhe");
-  rc_setup[7].connectMixer(&thrust,   &servoElevator);
-  rc_setup[7].setConfiguration(defaultConfig);
-
-  defaultConfig.setName("Mixer Quer->Seite");
-  rc_setup[8].connectMixer(&aileron,  &servoRudder);
-  rc_setup[8].setConfiguration(defaultConfig);
-
-  defaultConfig.setName("Mixer Butterfly");
-  rc_setup[9].connectMixer(&butterflyPosition, &servoAileronLeft);
-  rc_setup[9].setConfiguration(defaultConfig);
-  rc_setup[10].connectMixer(&butterflyPosition, &servoAileronRight);
-  rc_setup[10].setConfiguration(defaultConfig);
-  rc_setup[11].connectMixer(&butterflyPosition, &servoFlapLeft);
-  rc_setup[11].setConfiguration(defaultConfig);
-  rc_setup[12].connectMixer(&butterflyPosition, &servoFlapRight);
-  rc_setup[12].setConfiguration(defaultConfig);
-
-  rcMixerCount = 13;
+  Mixer* elevatorMixer = getMixer(MixerType::ELEVATOR);
+  if (elevatorMixer != nullptr) elevatorMixer->setGain(80, 60);
 
   initDebugMonitor();
 }
 
 void loop()
 {
-
-  switchExpo    = digitalRead(SWITCH_EXPO);
-  switchXYCurve = digitalRead(SWITCH_XY_CURVE);
-  
-  taskCtr++;
-  thrust.update();
-  rudder.update();  
-  elevator.update();
-  aileron.update();
-  flap.update();
-  flightMode.update();
-
-  const bool butterflyActive =
-    flightMode.getValue() == flightMode.getControlLimit();
-
-  if (butterflyActive)
-  {
-    const int32_t targetDifference =
-      static_cast<int32_t>(flap.getValue()) - butterflyPosition.getTarget();
-
-    if (abs(targetDifference) >= BUTTERFLY_POTI_DEADBAND)
-      butterflyPosition.setTarget(flap.getValue(), BUTTERFLY_DEPLOY_TIME_MS);
-  }
-  else
-  {
-    butterflyPosition.setTarget(0, BUTTERFLY_RETRACT_TIME_MS);
-  }
-
-  butterflyPosition.update();
-
-  expo = analogRead(EXPO);
-  if (switchExpo)
-  { 
-    thrust.setExpoCurve(expo);
-    rudder.setExpoCurve(expo);
-    elevator.setExpoCurve(expo);
-    aileron.setExpoCurve(expo);
-  }
-  else if (switchXYCurve)
-  {
-    const int16_t x[] = {-100, 0,  10,  20, 40, 90, 100};
-    const int16_t y[] = {   0, 0,   0,  10, 30, 70, 100};
-    const uint8_t n   = 7;
-    thrust.setXYCurve(x, y, n);
-    rudder.setXYCurve(x, y, n);
-    elevator.setXYCurve(x, y, n);
-    aileron.setXYCurve(x, y, n);
-  }
-  else
-  {
-    thrust.resetExpoCurve();
-    rudder.resetExpoCurve();
-    elevator.resetExpoCurve();
-    aileron.resetExpoCurve();
-
-    thrust.resetXYCurve();
-    rudder.resetXYCurve();
-    elevator.resetXYCurve();
-    aileron.resetXYCurve();
-  }
-
-  dualRateLeft        = analogRead(DUAL_RATE_LEFT);
-  dualRateRight       = analogRead(DUAL_RATE_RIGHT);
-  switchDualRateLeft  = digitalRead(SWITCH_DUALRATE_LEFT);
-  switchDualRateRight = digitalRead(SWITCH_DUALRATE_RIGHT);
-  if (switchDualRateLeft && switchDualRateRight)
-  {
-    thrust.setDualRate(dualRateLeft, dualRateRight);
-    rudder.setDualRate(dualRateLeft, dualRateRight);
-    elevator.setDualRate(dualRateLeft, dualRateRight);
-    aileron.setDualRate(dualRateLeft, dualRateRight);
-  }
-  else if (switchDualRateLeft)
-  {
-    thrust.setDualRate(dualRateLeft, 1023);
-    rudder.setDualRate(dualRateLeft, 1023);
-    elevator.setDualRate(dualRateLeft, 1023);
-    aileron.setDualRate(dualRateLeft, 1023);
-  }
-  else if (switchDualRateRight)
-  {
-    thrust.setDualRate(1023, dualRateRight);
-    rudder.setDualRate(1023, dualRateRight);
-    elevator.setDualRate(1023, dualRateRight);
-    aileron.setDualRate(1023, dualRateRight);
-  }
-  else
-  {
-    thrust.resetDualRate();
-    rudder.resetDualRate();
-    elevator.resetDualRate();
-    aileron.resetDualRate();
-  }
-
-  servoThrust.clearServo();
-  servoRudder.clearServo();
-  servoElevator.clearServo();
-  servoAileronLeft.clearServo();
-  servoAileronRight.clearServo();
-  servoFlapLeft.clearServo();
-  servoFlapRight.clearServo();
-
-  for (uint8_t mixerIndex = 0; mixerIndex < rcMixerCount; ++mixerIndex)
-  {
-    rc_setup[mixerIndex].runMixer();
-  }
-
-  updateDebugMonitor();
-
-  delay(100);
-
+  for (uint8_t idx = 0; idx < joystickCount;      ++idx) joysticks[idx]->update();
+  for (uint8_t idx = 0; idx < potentiometerCount; ++idx) potentiometers[idx]->update();
+  for (uint8_t idx = 0; idx < switchCount;        ++idx) switches[idx]->update();
+  for (uint8_t idx = 0; idx < servoCount;         ++idx) servos[idx]->clearServo();
+  for (uint8_t idx = 0; idx < rcMixerCount;       ++idx) rcMixerSetup[idx].runMixer();
 }
 // -----------------------------------------------------------------------------------------------------
 
